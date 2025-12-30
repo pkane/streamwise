@@ -51,9 +51,9 @@ export default function Dashboard(): JSX.Element {
     const total = serviceObjs.reduce((s, x) => s + (x.monthlyPrice ?? 0), 0);
 
     return (
-        <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans dark:bg-black">
-            <main className="mx-auto max-w-4xl p-8">
-                <header className="mb-8">
+        <div className="min-h-screen p-6 bg-zinc-50 text-zinc-900 font-sans dark:bg-black">
+            <main className="mx-auto max-w-4xl pb-6">
+                <header className="mb-8 py-12">
                     <h1 className="text-3xl font-semibold dark:text-zinc-50">Your Dashboard</h1>
                     <p className="mt-2 text-zinc-600 dark:text-zinc-400">Selected services: {serviceObjs.map(s => s.name).join(", ")} • Target ${targetBudget ?? "—"}</p>
                 </header>
@@ -87,7 +87,10 @@ export default function Dashboard(): JSX.Element {
                                     <div className="flex-1">
                                         <h3 className="text-lg font-semibold">{show.title}</h3>
                                         <p className="text-sm text-zinc-500">{show.year} • {show.genres.join(", ")}</p>
-                                        <p className="mt-2 text-sm text-zinc-600">{show.synopsis ?? "No synopsis available."}</p>
+                                        <p className="mt-2 text-sm text-zinc-600">{show.overview ?? "No overview available."}</p>
+                                        {show.actors && show.actors.length > 0 && (
+                                            <p className="mt-2 text-sm text-zinc-500">Starring: {show.actors.slice(0, 2).join(", ")}</p>
+                                        )}
                                         <div className="mt-3 text-sm text-zinc-500 flex items-center justify-between">
                                             <span>{show.serviceId.replace("svc_", "")}</span>
                                             <span>pop {show.popularity}</span>

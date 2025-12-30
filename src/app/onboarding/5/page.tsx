@@ -34,29 +34,34 @@ export default function Onboarding5() {
 
     return (
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
-            <main className="mx-auto max-w-2xl bg-white p-10 rounded-lg shadow">
-                <h1 className="text-2xl font-semibold mb-2">Do you want us to optimize this around a monthly budget?</h1>
-                <p className="text-sm text-zinc-600 mb-6">We’ll still surface everything worth watching. This just helps us time things better.</p>
+            <main className="mx-auto max-w-3xl">
+                <header className="text-center text-balance py-12 h-48">
+                    <h1 className="text-2xl font-semibold dark:text-zinc-50">Do you want us to optimize this around a monthly budget?</h1>
+                    <p className="text-sm text-zinc-400">We’ll still surface everything worth watching. This just helps us time things better.</p>
+                </header>
 
-                <div className="space-y-3 mb-6">
-                    {BUDGET_OPTIONS.map((opt) => (
-                        <label key={opt.id} className={`block p-4 rounded-lg border cursor-pointer ${target === opt.value ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
-                            <input type="radio" name="budget" checked={target === opt.value} onChange={() => setTarget(opt.value)} />
-                            <span className="ml-3 font-medium">{opt.label}</span>
-                        </label>
-                    ))}
+                <div className="bg-white p-8 rounded shadow">
+                    <div className="space-y-3 mb-6">
+                        {BUDGET_OPTIONS.map((opt) => (
+                            <label key={opt.id} className={`block p-4 rounded-lg border cursor-pointer ${target === opt.value ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
+                                <input type="radio" name="budget" checked={target === opt.value} onChange={() => setTarget(opt.value)} />
+                                <span className="ml-3 font-medium">{opt.label}</span>
+                            </label>
+                        ))}
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                        <button className="text-sm text-zinc-500" onClick={() => router.back()}>Back</button>
+                        <button
+                            onClick={handleContinue}
+                            className={`rounded-md px-4 py-2 text-white ${target !== undefined ? "bg-zinc-900" : "bg-zinc-200 text-zinc-500 cursor-not-allowed"}`}
+                            disabled={target === undefined}
+                        >
+                            Continue
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex justify-between items-center">
-                    <button className="text-sm text-zinc-500" onClick={() => router.back()}>Back</button>
-                    <button
-                        onClick={handleContinue}
-                        className={`rounded-md px-4 py-2 text-white ${target !== undefined ? "bg-zinc-900" : "bg-zinc-200 text-zinc-500 cursor-not-allowed"}`}
-                        disabled={target === undefined}
-                    >
-                        Continue
-                    </button>
-                </div>
             </main>
         </div>
     );

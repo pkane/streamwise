@@ -42,6 +42,8 @@ export interface Show {
     genres: Genre[];
     serviceId: string;
     popularity?: number; // 0..100
-    synopsis?: string;
+    overview?: string;
+    actors?: string[]; // first two actors (if available)
     imageSet?: ImageSet;
+    streamingOptions?: Record<string, any>;
 }

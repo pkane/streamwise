@@ -15,6 +15,7 @@ export async function GET() {
         targetBudget: 25,
         genres: ["Crime", "Drama"],
         bingeTolerance: 3,
+        services: []
     };
 
     // Fetch user's services (could be replaced with DB call or auth-scoped endpoint)

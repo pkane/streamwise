@@ -125,30 +125,35 @@ export default function Onboarding6() {
 
     return (
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
-            <main className="mx-auto max-w-3xl bg-white p-10 rounded-lg shadow">
-                <h1 className="text-3xl font-semibold mb-2">{headline}</h1>
-                <p className="text-sm text-zinc-600 mb-6">Based on your tastes and timing preferences, these services give you the most value right now:</p>
+            <main className="mx-auto max-w-3xl">
+                <header className="text-center text-balance py-12 h-48">
+                    <h1 className="text-2xl font-semibold dark:text-zinc-50">You're the {headline}</h1>
+                    <p className="text-sm text-zinc-400">Based on your tastes and timing preferences, these services give you the most value right now:</p>
+                </header>
 
-                <div className="mb-4">
-                    <div className="inline-flex items-center gap-3 flex-wrap">
-                        {selectedServiceIds.map((id) => (
-                            <span key={id} className="px-3 py-1 bg-zinc-100 rounded-full text-sm">{(SERVICE_CATALOG as any)[id]?.name ?? id}</span>
-                        ))}
+                <div className="bg-white p-8 rounded shadow">
+                    <div className="mb-4">
+                        <div className="inline-flex items-center gap-3 flex-wrap">
+                            {selectedServiceIds.map((id) => (
+                                <span key={id} className="px-3 py-1 bg-zinc-100 rounded-full text-sm">{(SERVICE_CATALOG as any)[id]?.name ?? id}</span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="mb-4">
+                        <div className="text-lg font-medium">You’ll spend ${total.toFixed(2)}/month</div>
+                        {diff !== null && diff !== undefined && (
+                            <div className="text-sm text-zinc-600">That’s ${Math.abs(diff).toFixed(2)} {diff > 0 ? "less" : "more"} than your target.</div>
+                        )}
+                    </div>
+
+                    <div className="mb-6 p-4 rounded border bg-zinc-50 text-sm">{insight}</div>
+
+                    <div className="flex justify-end">
+                        <button onClick={() => router.push("/dashboard")} className="rounded-md bg-zinc-900 text-white px-4 py-2">Go to my dashboard</button>
                     </div>
                 </div>
 
-                <div className="mb-4">
-                    <div className="text-lg font-medium">You’ll spend ${total.toFixed(2)}/month</div>
-                    {diff !== null && diff !== undefined && (
-                        <div className="text-sm text-zinc-600">That’s ${Math.abs(diff).toFixed(2)} {diff > 0 ? "more" : "less"} than your target.</div>
-                    )}
-                </div>
-
-                <div className="mb-6 p-4 rounded border bg-zinc-50 text-sm">{insight}</div>
-
-                <div className="flex justify-end">
-                    <button onClick={() => router.push("/dashboard")} className="rounded-md bg-zinc-900 text-white px-4 py-2">Go to my dashboard</button>
-                </div>
             </main>
         </div>
     );

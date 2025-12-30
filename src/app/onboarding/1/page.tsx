@@ -78,8 +78,8 @@ export default function OnboardingStep1() {
     return (
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
-                <header className="text-center py-12">
-                    <h1 className="text-2xl font-semibold">Which streaming services do you currently have?</h1>
+                <header className="text-center py-12 h-48">
+                    <h1 className="text-2xl font-semibold dark:text-zinc-50">Which streaming services do you currently have?</h1>
                     <p className="text-sm text-zinc-400 mt-2">Select everything you’re paying for—or regularly rotate through.</p>
                 </header>
 
