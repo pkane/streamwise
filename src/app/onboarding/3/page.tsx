@@ -66,7 +66,7 @@ export default function Onboarding3() {
     return (
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
-                <header className="text-center text-balance py-12 h-48">
+                <header className="text-center text-balance py-12 min-h-48">
                     <h1 className="text-2xl font-semibold dark:text-zinc-50">What kinds of shows do you actually look forward to watching?</h1>
                     <p className="text-sm text-zinc-400">Select genres that best describe what you enjoy.</p>
                 </header>
@@ -103,10 +103,10 @@ export default function Onboarding3() {
                                             <div className="font-medium">{show.title}</div>
                                             <div className="text-sm text-zinc-500">{show.serviceId.replace("svc_", "")}</div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => setSignal(show.showId, "seen")} className={`px-2 py-1 rounded ${showSignals[show.showId] === "seen" ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}>Seen</button>
-                                            <button onClick={() => setSignal(show.showId, "skip")} className={`px-2 py-1 rounded ${showSignals[show.showId] === "skip" ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}>Not for me</button>
-                                            <button onClick={() => setSignal(show.showId, "want")} className={`px-2 py-1 rounded ${showSignals[show.showId] === "want" ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}>Want</button>
+                                        <div className="flex gap-2 flex-wrap md:flex-nowrap">
+                                            <button onClick={() => setSignal(show.showId, "seen")} className={`basis-full md:basis-auto px-2 py-1 rounded ${showSignals[show.showId] === "seen" ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}>Seen</button>
+                                            <button onClick={() => setSignal(show.showId, "skip")} className={`basis-full md:basis-auto px-2 py-1 rounded ${showSignals[show.showId] === "skip" ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}>Not for me</button>
+                                            <button onClick={() => setSignal(show.showId, "want")} className={`basis-full md:basis-auto px-2 py-1 rounded ${showSignals[show.showId] === "want" ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}>Want</button>
                                         </div>
                                     </div>
                                 ))}

@@ -27,7 +27,7 @@ export default function Onboarding4() {
     return (
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
-                <header className="text-center text-balance py-12 h-48">
+                <header className="text-center text-balance py-12 min-h-48">
                     <h1 className="text-2xl font-semibold dark:text-zinc-50">How do you usually like shows to release?</h1>
                     <p className="text-sm text-zinc-400">This helps us decide when a service is worth activating.</p>
                 </header>

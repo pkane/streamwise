@@ -27,7 +27,7 @@ export default function Onboarding2() {
     return (
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
-                <header className="text-center text-balance py-12 h-48">
+                <header className="text-center text-balance py-12 min-h-48">
                     <h1 className="text-2xl font-semibold dark:text-zinc-50">Want us to include other household members in your recommendations?</h1>
                     <p className="text-sm text-zinc-400">This helps balance recommendations without adding extra subscriptions.</p>
                 </header>
