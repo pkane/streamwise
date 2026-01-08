@@ -4,13 +4,14 @@ import * as streamingAvailability from "streaming-availability";
 const RAPIDAPI_HOST = "streaming-availability.p.rapidapi.com";
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY ?? "178f0cb199mshc0a4017a852f94ap1e28fdjsn49e504496aae";
 
-export async function searchShowsByFilters(genres: string[], country = "us") {
+export async function searchShowsByFilters(genres: string[], country = "us", type = "series") {
     const client = new streamingAvailability.Client(new streamingAvailability.Configuration({ apiKey: RAPIDAPI_KEY }));
 
     // The SDK's `searchShowsByFilters` expects an object with filters
     const params: any = {
         country,
         genres,
+        type,
     };
 
     const resp = await client.showsApi.searchShowsByFilters(params as any);
