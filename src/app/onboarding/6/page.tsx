@@ -6,13 +6,13 @@ import { mockShows } from "../../../data/mockShows";
 import { recommendShows } from "../../../lib/recommendations";
 import type { Show } from "../../../models/types";
 
-const SERVICE_CATALOG = {
-    netflix: { serviceId: "svc_netflix", name: "Netflix", monthlyPrice: 15.49, status: "active" },
-    max: { serviceId: "svc_max", name: "Max", monthlyPrice: 9.99, status: "paused" },
-    hulu: { serviceId: "svc_hulu", name: "Hulu", monthlyPrice: 7.99, status: "always" },
-    apple: { serviceId: "svc_apple", name: "Apple TV+", monthlyPrice: 4.99, status: "paused" },
-    prime: { serviceId: "svc_prime", name: "Prime Video", monthlyPrice: 8.99, status: "paused" },
-};
+import { DEFAULT_SERVICES } from "../../../data/constants";
+
+// Build a quick lookup for local logic; keep the centralized data authoritative
+const SERVICE_CATALOG = DEFAULT_SERVICES.reduce((acc: Record<string, any>, s: any) => {
+    acc[s.id] = { serviceId: s.serviceId, name: s.name, monthlyPrice: s.monthlyPrice, status: s.status };
+    return acc;
+}, {} as Record<string, any>);
 
 const GENRE_HEADLINES: Record<string, string> = {
     Action: "The Adrenaline Architect",
@@ -73,7 +73,7 @@ export default function Onboarding6() {
     useEffect(() => {
         // Build services array used by recommendation engine
         const services = selectedServiceIds.map((id) => {
-            const s = SERVICE_CATALOG[id as keyof typeof SERVICE_CATALOG];
+            const s = SERVICE_CATALOG[id];
             return s ? { serviceId: s.serviceId, name: s.name, monthlyPrice: s.monthlyPrice, status: s.status } : { serviceId: `svc_${id}`, name: id, monthlyPrice: 0, status: "paused" };
         });
 

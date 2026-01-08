@@ -5,14 +5,7 @@ import { useRouter } from "next/navigation";
 
 // SCREEN 5 — Budget Target
 // Persists to `streamwise_user_targetBudget` as number or null
-
-const BUDGET_OPTIONS: Array<{ id: string; label: string; value: number | null }> = [
-    { id: "u50", label: "Under $50", value: 50 },
-    { id: "50-75", label: "$50–$75", value: 75 },
-    { id: "75-100", label: "$75–$100", value: 100 },
-    { id: "100+", label: "$100+", value: 150 },
-    { id: "none", label: "I don’t have a budget — just maximize value", value: null },
-];
+import { BUDGET_OPTIONS } from "../../../data/constants";
 
 export default function Onboarding5() {
     const router = useRouter();

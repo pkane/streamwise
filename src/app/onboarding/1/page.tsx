@@ -7,16 +7,12 @@ import { useRouter } from "next/navigation";
 // Purpose: collect baseline inventory of services the user currently has.
 // TODO: persist to backend when auth / DB exists. For now we store in localStorage.
 
+import { DEFAULT_SERVICES as DEFAULT_SERVICE_OPTIONS } from "../../../data/constants";
+
 type ServiceOption = { id: string; name: string };
 
-const DEFAULT_SERVICES: ServiceOption[] = [
-    { id: "netflix", name: "Netflix" },
-    { id: "max", name: "Max" },
-    { id: "hulu", name: "Hulu" },
-    { id: "apple", name: "Apple TV+" },
-    { id: "prime", name: "Prime Video" },
-    { id: "disney", name: "Disney+" },
-];
+// Map the centralized DEFAULT_SERVICES into the local ServiceOption shape
+const DEFAULT_SERVICES: ServiceOption[] = DEFAULT_SERVICE_OPTIONS.map((s: any) => ({ id: s.id, name: s.name }));
 
 export default function OnboardingStep1() {
     const router = useRouter();

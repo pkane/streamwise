@@ -1,13 +1,10 @@
 // src/lib/content/index.ts
 // Placeholder for show-fetching logic: fetching/parsing streaming catalogs
-// TODO: Implement actual fetching from provider APIs or cached catalogs.
 
 import type { UserProfile, Show } from "../../models/types";
 import { mockShows } from "../../data/mockShows";
 
 // Fetch shows for the given user. Currently this returns the local mock dataset
-// filtered by the user's preferred genres. In future this will fetch from
-// provider catalogs or a cached index (see MovieOfTheNight API for catalog shape).
 export async function fetchShowsForUser(user: UserProfile): Promise<Show[]> {
     // If user has specified genres, prioritize those; otherwise return all
     const preferred = user.genres && user.genres.length > 0;
