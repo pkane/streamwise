@@ -26,8 +26,17 @@ export async function fetchShowsByGenres(selectedGenres: string[]) {
 
     const genresParam = encodeURIComponent(JSON.stringify(genreIds));
     const url = `/api/shows?genres=${genresParam}`;
+    // Include current client localStorage values in a JSON header so the server-side
+    // API can derive the same user profile (server doesn't have access to localStorage).
+    const lsPayload = {
+        streamwise_user_services: localStorage.getItem("streamwise_user_services") ?? "",
+        streamwise_user_genres: localStorage.getItem("streamwise_user_genres") ?? "",
+        streamwise_user_targetBudget: localStorage.getItem("streamwise_user_targetBudget") ?? null,
+        streamwise_user_name: localStorage.getItem("streamwise_user_name") ?? "",
+        streamwise_user_id: localStorage.getItem("streamwise_user_id") ?? ""
+    };
     console.debug("fetchShowsByGenres - requesting", { selectedGenres, genreIds, url });
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: { "x-streamwise-localstorage": JSON.stringify(lsPayload) } });
     if (!res.ok) {
         console.debug("fetchShowsByGenres - non-ok response", { status: res.status });
         throw new Error(`shows fetch failed: ${res.status}`);
@@ -97,7 +106,6 @@ export default function Onboarding3() {
 
         let aborted = false;
         async function load() {
-            console.log(revealSeen)
             setLoadingShows(true);
             try {
                 const data = await fetchShowsByGenres(selectedGenres);
@@ -131,7 +139,7 @@ export default function Onboarding3() {
                             return (
                                 <button key={g.id} onClick={() => toggleGenre(g.id)} className={`p-3 rounded-lg text-left border ${chosen ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
                                     <div className="font-medium">{g.name}</div>
-                                    <div className="text-xs text-zinc-500 mt-1">e.g. examples</div>
+                                    {/* <div className="text-xs text-zinc-500 mt-1">e.g. examples</div> */}
                                 </button>
                             );
                         })}

@@ -83,8 +83,7 @@ export default function Onboarding6() {
         const user = { id: "anon", name: "You", targetBudget: targetBudget ?? 0, genres: genres.length ? genres : ["Crime"], bingeTolerance: 3 };
 
         const recs = recommendShows(user as any, services as any, pool as any, 8);
-        setRecommended(recs);
-
+        
         // Persist recommendations for dashboard
         try {
             localStorage.setItem("streamwise_recommendations", JSON.stringify(recs));

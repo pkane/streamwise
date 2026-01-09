@@ -4,15 +4,20 @@ import * as streamingAvailability from "streaming-availability";
 const RAPIDAPI_HOST = "streaming-availability.p.rapidapi.com";
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY ?? "178f0cb199mshc0a4017a852f94ap1e28fdjsn49e504496aae";
 
-export async function searchShowsByFilters(genres: string[], country = "us", type = "series") {
+export async function searchShowsByFilters(catalogs: string[], genres: string[], country = "us", showType = "series") {
     const client = new streamingAvailability.Client(new streamingAvailability.Configuration({ apiKey: RAPIDAPI_KEY }));
+
+    console.log(catalogs)
 
     // The SDK's `searchShowsByFilters` expects an object with filters
     const params: any = {
+        catalogs,
         country,
         genres,
-        type,
+        showType,
     };
+
+    console.debug("searchShowsByFilters - params", params);
 
     const resp = await client.showsApi.searchShowsByFilters(params as any);
 
@@ -21,22 +26,28 @@ export async function searchShowsByFilters(genres: string[], country = "us", typ
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anyResp: any = resp;
 
-    function extractArrayFromResponse(obj: any): any[] {
-        if (!obj) return [];
+    function extractArrayFromResponse(obj: any): any[] | undefined {
+        if (!obj) return undefined;
         if (Array.isArray(obj)) return obj;
         if (Array.isArray(obj.results)) return obj.results;
         if (obj.data && Array.isArray(obj.data)) return obj.data;
         if (obj.data && Array.isArray(obj.data.results)) return obj.data.results;
         if (Array.isArray(obj.body)) return obj.body;
+        if (Array.isArray(obj.shows)) return obj.shows;
         // Fallback: find first array value on the object
         for (const k of Object.keys(obj)) {
             if (Array.isArray(obj[k])) return obj[k];
         }
-        return [];
+        return undefined;
     }
 
     const extracted = extractArrayFromResponse(anyResp);
-    if (extracted.length) return extracted;
+    if (Array.isArray(extracted)) {
+        // Return the array even if it's empty — caller expects an array when present
+        return extracted;
+    }
+
+    // No array could be located in the response; log for debugging and return an empty list
     console.debug("searchShowsByFilters - unexpected response shape", { keys: Object.keys(anyResp), resp: anyResp });
     return [];
 }

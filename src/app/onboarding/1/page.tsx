@@ -22,12 +22,28 @@ export default function OnboardingStep1() {
     const [otherValue, setOtherValue] = useState("");
 
     useEffect(() => {
-        // hydrate previous selection from localStorage if present
+        // Hydrate both previously-added "Other" services and the user's selected IDs
+        // in a single initializer to avoid ordering/visibility races.
         try {
+            const extraRaw = localStorage.getItem("streamwise_extra_services");
+            const extras = extraRaw ? (JSON.parse(extraRaw) as ServiceOption[]) : [];
+
+            // Start from extras + defaults (extras first so they render at top)
+            const initialServices = extras.concat(DEFAULT_SERVICES.filter((s) => !extras.find((e) => e.id === s.id)));
+            setServices(initialServices);
+
             const raw = localStorage.getItem("streamwise_user_services");
             if (raw) {
                 const parsed = JSON.parse(raw) as string[];
                 setSelected(parsed);
+
+                // If selected contains any ids not present in service list (edge case),
+                // add minimal placeholders so the UI can render them as selected items.
+                const missing = parsed.filter((id) => !initialServices.find((s) => s.id === id));
+                if (missing.length) {
+                    const placeholders = missing.map((id) => ({ id, name: id } as ServiceOption));
+                    setServices((cur) => [...placeholders, ...cur]);
+                }
             }
         } catch (e) {
             // ignore
@@ -54,6 +70,20 @@ export default function OnboardingStep1() {
         setSelected((cur) => [id, ...cur]);
         setOtherValue("");
         setShowOtherModal(false);
+        try {
+            const extraRaw = localStorage.getItem("streamwise_extra_services");
+            const extras = extraRaw ? (JSON.parse(extraRaw) as ServiceOption[]) : [];
+            extras.unshift(newService);
+            localStorage.setItem("streamwise_extra_services", JSON.stringify(extras));
+        } catch (e) { }
+        try {
+            // Mark newly-added services as active by default and persist statuses
+            const statusKey = "streamwise_user_service_statuses";
+            const raw = localStorage.getItem(statusKey);
+            const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+            map[id] = "active";
+            localStorage.setItem(statusKey, JSON.stringify(map));
+        } catch (e) { }
     }
 
     function handleSkip() {
