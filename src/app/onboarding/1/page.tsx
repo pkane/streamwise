@@ -18,6 +18,7 @@ export default function OnboardingStep1() {
     const router = useRouter();
     const [services, setServices] = useState<ServiceOption[]>(DEFAULT_SERVICES);
     const [selected, setSelected] = useState<string[]>([]);
+    const [hydrated, setHydrated] = useState(false);
     const [showOtherModal, setShowOtherModal] = useState(false);
     const [otherValue, setOtherValue] = useState("");
 
@@ -48,14 +49,16 @@ export default function OnboardingStep1() {
         } catch (e) {
             // ignore
         }
+        setHydrated(true);
     }, []);
 
     useEffect(() => {
-        // persist selection locally so refresh keeps state
+        // Only persist after initial hydration to avoid overwriting with empty array
+        if (!hydrated) return;
         try {
             localStorage.setItem("streamwise_user_services", JSON.stringify(selected));
         } catch (e) { }
-    }, [selected]);
+    }, [selected, hydrated]);
 
     function toggle(id: string) {
         setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));

@@ -1,25 +1,33 @@
 // src/lib/content/index.ts
-// Placeholder for show-fetching logic: fetching/parsing streaming catalogs
+// Show-fetching logic using the streaming-availability API
 
 import type { UserProfile, Show } from "../../models/types";
-import { mockShows } from "../../data/mockShows";
+import { searchShowsByFilters } from "./streamingAvailability";
 
-// Fetch shows for the given user. Currently this returns the local mock dataset
-export async function fetchShowsForUser(user: UserProfile, services?: string[]): Promise<Show[]> {
-    // If user has specified genres, prioritize those; otherwise return all
-    const preferred = user.genres && user.genres.length > 0;
+/**
+ * Fetch shows for the given user from the streaming-availability API.
+ *
+ * @param user - User profile with genre preferences
+ * @param services - Optional list of service IDs to filter by
+ */
+export async function fetchShowsForUser(
+    user: UserProfile,
+    services?: string[]
+): Promise<Show[]> {
+    const genres = user.genres?.length ? user.genres : ["crime"];
 
-    const filtered = mockShows.filter((s) => {
-        if (preferred && !s.genres.some((g) => user.genres.includes(g))) return false;
-        // If a set of services was supplied, only include shows available on those services
-        if (services && services.length > 0) {
-            return services.includes(s.serviceId);
-        }
-        return true;
-    });
-
-    // In a real implementation, we'd also filter by services the user subscribes to.
-    return filtered;
+    try {
+        const shows = await searchShowsByFilters(
+            services ?? [],
+            genres,
+            "us",
+            "series"
+        );
+        return shows;
+    } catch (e) {
+        console.debug("fetchShowsForUser - API call failed", e);
+        return [];
+    }
 }
 
 export default { fetchShowsForUser };

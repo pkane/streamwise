@@ -1,22 +1,21 @@
 import { NextResponse, NextRequest } from "next/server";
-import type { UserProfile } from "../../../models/types";
+import type { UserProfile, UserService, Show } from "../../../models/types";
 import { recommendShows } from "../../../lib/recommendations";
 import { searchShowsByFilters } from "../../../lib/content/streamingAvailability";
 import { DEFAULT_SERVICES, GENRES } from "../../../data/constants";
-import type { UserService } from "../../../models/types";
+// import { mockShows } from "../../../data/mockShows";
 
 // GET /api/shows
-// Returns recommended shows for the (mock) user. In future this will accept
-// auth and query params to scope and paginate results.
+// Returns recommended shows for the user based on their preferences.
 export async function GET(req: NextRequest) {
-    // Try to derive user profile from query params or a client-sent localStorage JSON header.
     const qp = req.nextUrl.searchParams;
 
+    // Parse localStorage values from header (client can't access localStorage server-side)
     const lsHeader = req.headers.get("x-streamwise-localstorage") ?? "";
     let localStorageValues: Record<string, string> = {};
     try {
         localStorageValues = lsHeader ? JSON.parse(lsHeader) : {};
-    } catch (e) {
+    } catch {
         localStorageValues = {};
     }
 
@@ -25,20 +24,21 @@ export async function GET(req: NextRequest) {
     const rawBudget = qp.get("targetBudget") ?? localStorageValues["streamwise_user_targetBudget"] ?? null;
     const rawName = qp.get("name") ?? localStorageValues["streamwise_user_name"] ?? "You";
 
-    function parseList(raw: string) {
-        if (!raw) return [] as string[];
+    function parseList(raw: string): string[] {
+        if (!raw) return [];
         try {
             if (raw.trim().startsWith("[")) return JSON.parse(raw) as string[];
             return raw.split(",").map((s) => s.trim()).filter(Boolean);
-        } catch (e) {
+        } catch {
             return raw.split(",").map((s) => s.trim()).filter(Boolean);
         }
     }
 
     const servicesSelected = parseList(rawServices);
-    const genresSelected = parseList(rawGenres).length ? parseList(rawGenres) : ["Crime"];
+    const genresSelected = parseList(rawGenres).length ? parseList(rawGenres) : ["crime"];
     const targetBudget = rawBudget === null || rawBudget === "null" ? null : rawBudget ? Number(rawBudget) : 0;
 
+    // Build user profile
     const user: UserProfile = {
         id: localStorageValues["streamwise_user_id"] ?? qp.get("id") ?? "anon",
         name: rawName,
@@ -48,33 +48,59 @@ export async function GET(req: NextRequest) {
         services: []
     };
 
-    // Use onboarding default services as the canonical set to filter/match against
-    const services: UserService[] = (DEFAULT_SERVICES as any)
-        .filter((s: any) => servicesSelected.length ? servicesSelected.includes(s.id) : true)
-        .map((s: any) => ({ serviceId: s.serviceId, name: s.name, monthlyPrice: s.monthlyPrice, status: s.status }));
+    // Filter services based on user selection
+    const services: UserService[] = DEFAULT_SERVICES
+        .filter((s) => servicesSelected.length === 0 || servicesSelected.includes(s.id))
+        .map((s) => ({
+            serviceId: s.serviceId,
+            name: s.name,
+            monthlyPrice: s.monthlyPrice,
+            status: s.status as "active" | "paused" | "always"
+        }));
 
-    // Ensure genres are mapped to API ids (support display names or ids)
-    const genreIds = (user.genres && user.genres.length ? user.genres : ["Crime"]).map((val) => {
-        const asStr = String(val);
-        const byId = GENRES.find((g: any) => g.id === asStr.toLowerCase());
+    // Normalize genres to API ids
+    const genreIds = user.genres.map((val) => {
+        const asStr = String(val).toLowerCase();
+        const byId = GENRES.find((g) => g.id === asStr);
         if (byId) return byId.id;
-        const byName = GENRES.find((g: any) => g.name.toLowerCase() === asStr.toLowerCase());
+        const byName = GENRES.find((g) => g.name.toLowerCase() === asStr);
         if (byName) return byName.id;
-        return asStr.toLowerCase().replace(/[^a-z0-9]+/g, "");
+        return asStr.replace(/[^a-z0-9]+/g, "");
     });
 
-    // Fetch available shows from Streaming Availability (RapidAPI) for the user's genres
-    let pool = [];
+    // Update user genres to normalized ids
+    user.genres = genreIds;
+
+    // Fetch shows from streaming-availability API
+    let pool: Show[] = [];
     try {
-        pool = await searchShowsByFilters(services.map(service => service.serviceId), genreIds, "us", "series");
-        // update user.genres to canonical ids for recommendation logic
-        user.genres = genreIds;
+        pool = await searchShowsByFilters(
+            services.map((s) => s.serviceId),
+            genreIds,
+            "us",
+            "series"
+        );
     } catch (e) {
-        // If external API fails, fall back to an empty pool — recommendShows should handle gracefully.
-        pool = [] as any[];
+        console.debug("/api/shows - API call failed", e);
     }
 
-    const recommended = recommendShows(user, services as any, pool as any, 8);
+    // Fallback to mock data if API returns nothing
+    // if (pool.length === 0) {
+    //     const genresLower = genreIds.map((g) => g.toLowerCase());
+    //     pool = mockShows.filter((s) => {
+    //         const hasMatchingGenre = s.genres.some((g) =>
+    //             genresLower.includes(g.toLowerCase())
+    //         );
+    //         if (!hasMatchingGenre) return false;
+    //         if (servicesSelected.length > 0) {
+    //             const svcId = s.serviceId.replace("svc_", "");
+    //             return servicesSelected.includes(svcId) || servicesSelected.includes(s.serviceId);
+    //         }
+    //         return true;
+    //     });
+    // }
+
+    const recommended = recommendShows(user, services, pool, 8);
 
     return NextResponse.json(recommended);
 }

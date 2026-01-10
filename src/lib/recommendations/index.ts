@@ -1,11 +1,9 @@
 // src/lib/recommendations/index.ts
-// Placeholder for recommendation / relevance engine.
-// TODO: Implement scoring logic, collaborative filters, and heuristics.
+// Recommendation / relevance engine for scoring and ranking shows.
 
 import type { UserService, Show, UserProfile } from "../../models/types";
-import { mockShows } from "../../data/mockShows";
 
-// scoreServiceValue: existing stub — keeps services ordered by relevanceScore then price
+// scoreServiceValue: keeps services ordered by relevanceScore then price
 export function scoreServiceValue(services: UserService[]) {
     return services.slice().sort((a, b) => {
         const aScore = (a.relevanceScore ?? 0) - a.monthlyPrice / 100;
@@ -14,30 +12,52 @@ export function scoreServiceValue(services: UserService[]) {
     });
 }
 
-// Recommend shows for a user given a pool of shows.
-// Simple heuristic used for the mock:
-//  - +10 points for each matching genre
-//  - +popularity (0..100)
-//  - +5 if show's service is marked `always` in user's services
-// The MovieOfTheNight API uses provider + metadata fields; mirror shape in comments.
-export function recommendShows(user: UserProfile, services: UserService[], pool?: Show[], limit = 6) {
-    // pool defaults to all mockShows; in production we'd pass shows fetched for user
-    const shows = pool ?? mockShows;
+/**
+ * Recommend shows for a user given a pool of shows.
+ * Scoring heuristic:
+ *  - +10 points for each matching genre (case-insensitive)
+ *  - +popularity (0..100)
+ *  - +5 if show's service is marked `always` in user's services
+ *
+ * @param user - User profile with genre preferences
+ * @param services - User's streaming services with status
+ * @param pool - Shows to score and rank (required - no mock fallback)
+ * @param limit - Max number of shows to return
+ */
+export function recommendShows(
+    user: UserProfile,
+    services: UserService[],
+    pool: Show[],
+    limit = 6
+): Show[] {
+    if (!pool || pool.length === 0) {
+        return [];
+    }
 
     const serviceStatusById = new Map<string, UserService>();
     services.forEach((s) => serviceStatusById.set(s.serviceId, s));
 
-    const scored = shows.map((show) => {
+    // Normalize user genres to lowercase for comparison
+    const userGenresLower = user.genres.map((g) => g.toLowerCase());
+
+    const scored = pool.map((show) => {
         let score = 0;
-        // genre matches
+
+        // Genre matches (case-insensitive)
         for (const g of show.genres) {
-            if (user.genres.includes(g)) score += 10;
+            if (userGenresLower.includes(g.toLowerCase())) {
+                score += 10;
+            }
         }
-        // popularity bonus
+
+        // Popularity bonus
         score += show.popularity ?? 0;
 
+        // Service preference bonus
         const svc = serviceStatusById.get(show.serviceId);
-        if (svc && svc.status === "always") score += 5;
+        if (svc && svc.status === "always") {
+            score += 5;
+        }
 
         return { show, score };
     });
