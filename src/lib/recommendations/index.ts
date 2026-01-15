@@ -28,7 +28,7 @@ export function recommendShows(
     user: UserProfile,
     services: UserService[],
     pool: Show[],
-    limit = 6
+    limit = 12
 ): Show[] {
     if (!pool || pool.length === 0) {
         return [];
@@ -38,14 +38,14 @@ export function recommendShows(
     services.forEach((s) => serviceStatusById.set(s.serviceId, s));
 
     // Normalize user genres to lowercase for comparison
-    const userGenresLower = user.genres.map((g) => g.toLowerCase());
+    const userGenres = user.genres.map((g) => g.toLowerCase());
 
     const scored = pool.map((show) => {
         let score = 0;
 
         // Genre matches (case-insensitive)
         for (const g of show.genres) {
-            if (userGenresLower.includes(g.toLowerCase())) {
+            if (userGenres.includes(g.toLowerCase())) {
                 score += 10;
             }
         }

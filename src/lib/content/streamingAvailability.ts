@@ -30,8 +30,6 @@ export async function searchShowsByFilters(
         ratingMin: 80
     };
 
-    console.debug("searchShowsByFilters - params", params);
-
     const resp = await client.showsApi.searchShowsByFilters(params as any);
 
     // Extract the shows array from the response

@@ -24,25 +24,36 @@ export async function fetchShowsByGenres(selectedGenres: string[]) {
         return String(val).toLowerCase().replace(/[^a-z0-9]+/g, "");
     });
 
-    const genresParam = encodeURIComponent(JSON.stringify(genreIds));
-    const url = `/api/shows?genres=${genresParam}`;
-    // Include current client localStorage values in a JSON header so the server-side
-    // API can derive the same user profile (server doesn't have access to localStorage).
+    // Get user's selected services from localStorage
+    const servicesRaw = localStorage.getItem("streamwise_user_services") ?? "[]";
+    let services: string[] = [];
+    try {
+        services = JSON.parse(servicesRaw);
+    } catch {
+        services = [];
+    }
+
+    // Build URL with both services and genres as query params
+    const params = new URLSearchParams({
+        genres: JSON.stringify(genreIds),
+        services: JSON.stringify(services),
+    });
+    const url = `/api/shows?${params.toString()}`;
+
+    // Include current client localStorage values in a JSON header as backup
     const lsPayload = {
-        streamwise_user_services: localStorage.getItem("streamwise_user_services") ?? "",
+        streamwise_user_services: servicesRaw,
         streamwise_user_genres: localStorage.getItem("streamwise_user_genres") ?? "",
         streamwise_user_targetBudget: localStorage.getItem("streamwise_user_targetBudget") ?? null,
         streamwise_user_name: localStorage.getItem("streamwise_user_name") ?? "",
         streamwise_user_id: localStorage.getItem("streamwise_user_id") ?? ""
     };
-    console.debug("fetchShowsByGenres - requesting", { selectedGenres, genreIds, url });
     const res = await fetch(url, { headers: { "x-streamwise-localstorage": JSON.stringify(lsPayload) } });
     if (!res.ok) {
         console.debug("fetchShowsByGenres - non-ok response", { status: res.status });
         throw new Error(`shows fetch failed: ${res.status}`);
     }
     const data = await res.json();
-    console.debug("fetchShowsByGenres - response", { ok: res.ok, status: res.status, count: Array.isArray(data) ? data.length : 0 });
     return Array.isArray(data) ? data : [];
 }
 

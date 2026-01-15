@@ -71,15 +71,19 @@ export async function GET(req: NextRequest) {
     // Update user genres to normalized ids
     user.genres = genreIds;
 
+    // Build catalogs array for the API - use selected service IDs
+    const catalogs = services.map((s) => s.serviceId);
+
     // Fetch shows from streaming-availability API
     let pool: Show[] = [];
     try {
         pool = await searchShowsByFilters(
-            services.map((s) => s.serviceId),
+            catalogs,
             genreIds,
             "us",
             "series"
         );
+        console.debug("/api/shows - API returned", { count: pool.length });
     } catch (e) {
         console.debug("/api/shows - API call failed", e);
     }
