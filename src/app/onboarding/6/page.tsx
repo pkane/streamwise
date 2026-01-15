@@ -1,15 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Show } from "../../../models/types";
-import { DEFAULT_SERVICES } from "../../../data/constants";
-
-// Build a quick lookup for local logic; keep the centralized data authoritative
-const SERVICE_CATALOG = DEFAULT_SERVICES.reduce((acc, s) => {
-    acc[s.id] = { serviceId: s.serviceId, name: s.name, monthlyPrice: s.monthlyPrice, status: s.status };
-    return acc;
-}, {} as Record<string, { serviceId: string; name: string; monthlyPrice: number; status: string }>);
 
 // Map genre IDs to display-friendly headlines
 const GENRE_HEADLINES: Record<string, string> = {
@@ -36,27 +29,59 @@ const GENRE_HEADLINES: Record<string, string> = {
     western: "The Modern Gunslinger",
 };
 
+/** Optimized service from API */
+interface OptimizedService {
+    serviceId: string;
+    name: string;
+    monthlyPrice: number;
+    showCount: number;
+    recommendedStatus: "active" | "paused" | "always";
+}
+
+/** Full API response with optimized services */
+interface OptimizedResponse {
+    shows: Show[];
+    services: OptimizedService[];
+    totalMonthlyCost: number;
+    budgetRemaining: number | null;
+}
+
 /**
- * Fetch recommendations from the API endpoint.
+ * Fetch optimized recommendations from the API endpoint.
  */
-async function fetchRecommendationsFromApi(
+async function fetchOptimizedRecommendations(
     services: string[],
-    genres: string[]
-): Promise<Show[]> {
+    genres: string[],
+    showSignals: Record<string, string>,
+    releasePreference: string,
+    targetBudget: number | null,
+    serviceStatuses: Record<string, string>
+): Promise<OptimizedResponse | null> {
     const params = new URLSearchParams({
         services: JSON.stringify(services),
         genres: JSON.stringify(genres),
+        showSignals: JSON.stringify(showSignals),
+        releasePreference,
+        targetBudget: targetBudget !== null ? String(targetBudget) : "null",
+        serviceStatuses: JSON.stringify(serviceStatuses),
+        useNextWatch: "true",
     });
 
     const res = await fetch(`/api/shows?${params.toString()}`);
 
     if (!res.ok) {
-        console.debug("fetchRecommendationsFromApi - failed", res.status);
-        return [];
+        console.debug("fetchOptimizedRecommendations - failed", res.status);
+        return null;
     }
 
     const data = await res.json();
-    return Array.isArray(data) ? data : [];
+
+    // Handle both old array format and new object format
+    if (Array.isArray(data)) {
+        return { shows: data, services: [], totalMonthlyCost: 0, budgetRemaining: null };
+    }
+
+    return data as OptimizedResponse;
 }
 
 export default function Onboarding6() {
@@ -64,7 +89,12 @@ export default function Onboarding6() {
     const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
     const [genres, setGenres] = useState<string[]>([]);
     const [targetBudget, setTargetBudget] = useState<number | null>(null);
+    const [showSignals, setShowSignals] = useState<Record<string, string>>({});
+    const [releasePreference, setReleasePreference] = useState<string>("mixed");
+    const [serviceStatuses, setServiceStatuses] = useState<Record<string, string>>({});
     const [recommended, setRecommended] = useState<Show[]>([]);
+    const [optimizedServices, setOptimizedServices] = useState<OptimizedService[]>([]);
+    const [totalMonthlyCost, setTotalMonthlyCost] = useState<number>(0);
     const [headline, setHeadline] = useState<string>("Watch with confidence.");
     const [insight, setInsight] = useState<string>("");
     const [loading, setLoading] = useState(true);
@@ -74,7 +104,7 @@ export default function Onboarding6() {
         try {
             const svcRaw = localStorage.getItem("streamwise_user_services");
             const svc = svcRaw ? (JSON.parse(svcRaw) as string[]) : [];
-            const sids = svc.length > 0 ? svc : ["netflix", "max", "hulu", "apple"];
+            const sids = svc.length > 0 ? svc : ["netflix", "hbo", "hulu", "apple"];
             setSelectedServiceIds(sids);
 
             const gRaw = localStorage.getItem("streamwise_user_genres");
@@ -87,8 +117,26 @@ export default function Onboarding6() {
             } else {
                 setTargetBudget(Number(tb));
             }
-        } catch (e) {
-            setSelectedServiceIds(["netflix", "max", "hulu", "apple"]);
+
+            // Load show signals from step 3b
+            const signalsRaw = localStorage.getItem("streamwise_user_showSignals");
+            if (signalsRaw) {
+                setShowSignals(JSON.parse(signalsRaw) as Record<string, string>);
+            }
+
+            // Load release preference from step 4
+            const relPref = localStorage.getItem("streamwise_user_releasePreference");
+            if (relPref) {
+                setReleasePreference(relPref);
+            }
+
+            // Load service statuses
+            const statusesRaw = localStorage.getItem("streamwise_user_service_statuses");
+            if (statusesRaw) {
+                setServiceStatuses(JSON.parse(statusesRaw) as Record<string, string>);
+            }
+        } catch {
+            setSelectedServiceIds(["netflix", "hbo", "hulu", "apple"]);
             setGenres(["crime"]);
             setTargetBudget(null);
         }
@@ -101,41 +149,46 @@ export default function Onboarding6() {
         async function loadRecommendations() {
             setLoading(true);
             try {
-                const recs = await fetchRecommendationsFromApi(selectedServiceIds, genres);
-                setRecommended(recs);
+                const result = await fetchOptimizedRecommendations(
+                    selectedServiceIds,
+                    genres,
+                    showSignals,
+                    releasePreference,
+                    targetBudget,
+                    serviceStatuses
+                );
 
-                // Persist recommendations for dashboard
-                try {
-                    localStorage.setItem("streamwise_recommendations", JSON.stringify(recs));
-                } catch (e) { /* ignore */ }
+                if (result) {
+                    setRecommended(result.shows);
+                    setOptimizedServices(result.services);
+                    setTotalMonthlyCost(result.totalMonthlyCost);
 
-                // Headline: pick first genre or fallback to top genre from recs
-                const primaryGenre = genres.length ? genres[0] : (() => {
-                    const counts: Record<string, number> = {};
-                    recs.forEach((r) => r.genres.forEach((g) => counts[g] = (counts[g] || 0) + 1));
-                    const sorted = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-                    return sorted[0] ?? "drama";
-                })();
+                    // Persist for dashboard
+                    try {
+                        localStorage.setItem("streamwise_recommendations", JSON.stringify(result.shows));
+                        localStorage.setItem("streamwise_optimized_services", JSON.stringify(result.services));
+                    } catch { /* ignore */ }
 
-                // Look up headline by genre ID (lowercase)
+                    // Build insight from optimized services
+                    const activeServices = result.services.filter(
+                        (s) => s.recommendedStatus === "active" || s.recommendedStatus === "always"
+                    );
+
+                    if (activeServices.length >= 2) {
+                        const names = activeServices.slice(0, 2).map((s) => s.name);
+                        setInsight(`Based on your tastes, ${names[0]} and ${names[1]} offer the best value. We found ${result.shows.length} shows you'll love.`);
+                    } else if (activeServices.length === 1) {
+                        setInsight(`${activeServices[0].name} is your best pick right now with ${activeServices[0].showCount} great shows for you.`);
+                    } else {
+                        setInsight("We'll surface the best services based on new releases and your tastes.");
+                    }
+                }
+
+                // Headline: pick first genre
+                const primaryGenre = genres.length ? genres[0] : "drama";
                 const genreKey = primaryGenre.toLowerCase();
                 setHeadline(GENRE_HEADLINES[genreKey] ?? "Watch with confidence.");
 
-                // Insight: simple computation from recs by service counts
-                const countsByService: Record<string, number> = {};
-                recs.forEach((r) => countsByService[r.serviceId] = (countsByService[r.serviceId] || 0) + 1);
-                const sortedServices = Object.keys(countsByService).sort((a, b) => countsByService[b] - countsByService[a]);
-
-                if (sortedServices.length >= 2) {
-                    const s1 = sortedServices[0];
-                    const s2 = sortedServices[1];
-                    setInsight(`In the coming weeks, new releases make ${capitalize(s1)} and ${capitalize(s2)} strong picks. We'll let you know when to switch.`);
-                } else if (sortedServices.length === 1) {
-                    const s1 = sortedServices[0];
-                    setInsight(`${capitalize(s1)} looks like the best pick right now.`);
-                } else {
-                    setInsight("We'll surface the best services based on new releases and your tastes.");
-                }
             } catch (e) {
                 console.debug("Onboarding6 - error loading recommendations", e);
                 setInsight("We'll surface the best services based on new releases and your tastes.");
@@ -145,39 +198,53 @@ export default function Onboarding6() {
         }
 
         loadRecommendations();
-    }, [selectedServiceIds, genres, targetBudget]);
+    }, [selectedServiceIds, genres, targetBudget, showSignals, releasePreference, serviceStatuses]);
 
-    const total = selectedServiceIds.reduce((sum, id) => {
-        const s = SERVICE_CATALOG[id];
-        return sum + (s ? s.monthlyPrice : 0);
-    }, 0);
+    // Get active optimized services
+    const activeServices = optimizedServices.filter(
+        (s) => s.recommendedStatus === "active" || s.recommendedStatus === "always"
+    );
 
-    const diff = targetBudget === null ? null : Math.round((targetBudget - total) * 100) / 100;
+    const budgetDiff = targetBudget !== null ? targetBudget - totalMonthlyCost : null;
 
     return (
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center text-balance py-12 min-h-48">
-                    <h1 className="text-2xl font-semibold dark:text-zinc-50">You're the {headline}</h1>
-                    <p className="text-sm text-zinc-400">Based on your tastes and timing preferences, these services give you the most value right now:</p>
+                    <h1 className="text-2xl font-semibold dark:text-zinc-50">You are the {headline}</h1>
+                    <p className="text-sm text-zinc-400">Based on your tastes and budget, we recommend these services:</p>
                 </header>
 
                 <div className="bg-white p-8 rounded shadow">
                     <div className="mb-4">
+                        <p className="text-sm text-zinc-500 mb-2">Recommended services:</p>
                         <div className="inline-flex items-center gap-3 flex-wrap">
-                            {selectedServiceIds.map((id) => (
-                                <span key={id} className="px-3 py-1 bg-zinc-100 rounded-full text-sm">
-                                    {SERVICE_CATALOG[id]?.name ?? id}
-                                </span>
-                            ))}
+                            {activeServices.length > 0 ? (
+                                activeServices.map((svc) => (
+                                    <span key={svc.serviceId} className="px-3 py-1 bg-zinc-100 rounded-full text-sm">
+                                        {svc.name}
+                                        <span className="text-zinc-400 ml-1">({svc.showCount} shows)</span>
+                                    </span>
+                                ))
+                            ) : (
+                                selectedServiceIds.map((id) => (
+                                    <span key={id} className="px-3 py-1 bg-zinc-100 rounded-full text-sm">
+                                        {id}
+                                    </span>
+                                ))
+                            )}
                         </div>
                     </div>
 
                     <div className="mb-4">
-                        <div className="text-lg font-medium">You'll spend ${total.toFixed(2)}/month</div>
-                        {diff !== null && (
-                            <div className="text-sm text-zinc-600">
-                                That's ${Math.abs(diff).toFixed(2)} {diff > 0 ? "less" : "more"} than your target.
+                        <div className="text-lg font-medium">
+                            You will spend ${totalMonthlyCost.toFixed(2)}/month
+                        </div>
+                        {budgetDiff !== null && (
+                            <div className={`text-sm ${budgetDiff >= 0 ? "text-green-600" : "text-amber-600"}`}>
+                                {budgetDiff >= 0
+                                    ? `$${budgetDiff.toFixed(2)} under your $${targetBudget} target`
+                                    : `$${Math.abs(budgetDiff).toFixed(2)} over your $${targetBudget} target`}
                             </div>
                         )}
                     </div>
@@ -190,7 +257,30 @@ export default function Onboarding6() {
                         )}
                     </div>
 
-                    <div className="flex justify-end">
+                    {/* Teaser: Show 3 thumbnails of upcoming recommendations */}
+                    {!loading && recommended.length > 0 && (
+                        <div className="mt-6 pt-6 border-t border-zinc-200">
+                            <p className="text-sm text-zinc-500 mb-3">A taste of what awaits you:</p>
+                            <div className="flex gap-3 justify-center">
+                                {recommended.slice(0, 3).map((show) => (
+                                    <div key={show.showId} className="w-20 group relative">
+                                        <img
+                                            src={show.imageSet?.verticalPoster?.w360 ?? "/vertical-poster.svg"}
+                                            width={80}
+                                            height={120}
+                                            alt={show.title}
+                                            className="rounded-sm object-cover w-full shadow-sm"
+                                        />
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-sm flex items-end p-1">
+                                            <span className="text-white text-xs font-medium line-clamp-2">{show.title}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end mt-6">
                         <button
                             onClick={() => router.push("/dashboard")}
                             className="rounded-md bg-zinc-900 text-white px-4 py-2"
@@ -203,8 +293,4 @@ export default function Onboarding6() {
             </main>
         </div>
     );
-}
-
-function capitalize(str: string): string {
-    return str.charAt(0).toUpperCase() + str.slice(1);
 }

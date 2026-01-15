@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import type { UserProfile, UserService, Show } from "../../../models/types";
-import { recommendShows } from "../../../lib/recommendations";
+import { recommendShows, optimizeServices } from "../../../lib/recommendations";
+import type { RecommendNextWatchOptions, ShowSignal } from "../../../lib/recommendations";
 import { searchShowsByFilters } from "../../../lib/content/streamingAvailability";
 import { DEFAULT_SERVICES, GENRES } from "../../../data/constants";
 // import { mockShows } from "../../../data/mockShows";
@@ -23,6 +24,12 @@ export async function GET(req: NextRequest) {
     const rawGenres = qp.get("genres") ?? localStorageValues["streamwise_user_genres"] ?? "";
     const rawBudget = qp.get("targetBudget") ?? localStorageValues["streamwise_user_targetBudget"] ?? null;
     const rawName = qp.get("name") ?? localStorageValues["streamwise_user_name"] ?? "You";
+
+    // Additional params for recommendNextWatch
+    const rawShowSignals = qp.get("showSignals") ?? localStorageValues["streamwise_user_showSignals"] ?? "";
+    const rawReleasePreference = qp.get("releasePreference") ?? localStorageValues["streamwise_user_releasePreference"] ?? "mixed";
+    const rawServiceStatuses = qp.get("serviceStatuses") ?? localStorageValues["streamwise_user_service_statuses"] ?? "";
+    const useNextWatch = qp.get("useNextWatch") === "true";
 
     function parseList(raw: string): string[] {
         if (!raw) return [];
@@ -71,19 +78,43 @@ export async function GET(req: NextRequest) {
     // Update user genres to normalized ids
     user.genres = genreIds;
 
-    // Build catalogs array for the API - use selected service IDs
-    const catalogs = services.map((s) => s.serviceId);
+    // Build catalogs array for the API
+    // Search across ALL default services to get a broader pool, then let recommendation engine prioritize
+    const allServiceIds = DEFAULT_SERVICES.map((s) => s.serviceId);
+    const userServiceIds = services.map((s) => s.serviceId);
 
     // Fetch shows from streaming-availability API
     let pool: Show[] = [];
     try {
+        // First, search within user's selected services
         pool = await searchShowsByFilters(
-            catalogs,
+            userServiceIds,
             genreIds,
             "us",
             "series"
         );
-        console.debug("/api/shows - API returned", { count: pool.length });
+        console.debug("/api/shows - API returned from user services", { count: pool.length });
+
+        // If we don't have enough results (< 12), broaden search to all services
+        if (pool.length < 12) {
+            const additionalPool = await searchShowsByFilters(
+                allServiceIds,
+                genreIds,
+                "us",
+                "series"
+            );
+            console.debug("/api/shows - API returned from all services", { count: additionalPool.length });
+
+            // Merge and dedupe by showId
+            const existingIds = new Set(pool.map((s) => s.showId));
+            for (const show of additionalPool) {
+                if (!existingIds.has(show.showId)) {
+                    pool.push(show);
+                    existingIds.add(show.showId);
+                }
+            }
+            console.debug("/api/shows - merged pool", { count: pool.length });
+        }
     } catch (e) {
         console.debug("/api/shows - API call failed", e);
     }
@@ -104,7 +135,62 @@ export async function GET(req: NextRequest) {
     //     });
     // }
 
-    const recommended = recommendShows(user, services, pool, 8);
+    // Parse additional options
+    let showSignals: Record<string, ShowSignal> = {};
+    try {
+        if (rawShowSignals) {
+            const parsed = rawShowSignals.trim().startsWith("{")
+                ? JSON.parse(rawShowSignals)
+                : {};
+            showSignals = parsed as Record<string, ShowSignal>;
+        }
+    } catch {
+        showSignals = {};
+    }
 
-    return NextResponse.json(recommended);
+    let serviceStatuses: Record<string, string> = {};
+    try {
+        if (rawServiceStatuses) {
+            serviceStatuses = rawServiceStatuses.trim().startsWith("{")
+                ? JSON.parse(rawServiceStatuses)
+                : {};
+        }
+    } catch {
+        serviceStatuses = {};
+    }
+
+    const releasePreference = (["weekly", "binge", "mixed"].includes(rawReleasePreference)
+        ? rawReleasePreference
+        : "mixed") as "weekly" | "binge" | "mixed";
+
+    const options: RecommendNextWatchOptions = {
+        showSignals,
+        releasePreference,
+        targetBudget: targetBudget,
+        serviceStatuses,
+    };
+
+    // Build all services list for optimization
+    const allServices: UserService[] = DEFAULT_SERVICES.map((s) => ({
+        serviceId: s.serviceId,
+        name: s.name,
+        monthlyPrice: s.monthlyPrice,
+        status: (serviceStatuses[s.serviceId] ?? s.status) as "active" | "paused" | "always"
+    }));
+
+    if (useNextWatch) {
+        // Use optimizeServices to get both optimized service recommendations and shows
+        const result = optimizeServices(user, allServices, pool, options, 24);
+
+        // Return the full result with optimized services
+        return NextResponse.json({
+            shows: result.shows.slice(0, 16),
+            services: result.services,
+            totalMonthlyCost: result.totalMonthlyCost,
+            budgetRemaining: result.budgetRemaining,
+        });
+    } else {
+        const recommended = recommendShows(user, services, pool, 16);
+        return NextResponse.json(recommended);
+    }
 }

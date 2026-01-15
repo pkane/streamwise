@@ -21,27 +21,46 @@ export async function searchShowsByFilters(
     );
 
     // The SDK's `searchShowsByFilters` expects an object with filters
+    // Note: API uses snake_case for some params but SDK may convert them
     const params: any = {
         catalogs,
         country,
-        genres,
         showType,
         genresRelation: "or",
         ratingMin: 80
     };
 
-    const resp = await client.showsApi.searchShowsByFilters(params as any);
-
-    // Extract the shows array from the response
-    const apiShows = extractArrayFromResponse(resp) as ApiShow[];
-
-    if (!apiShows || apiShows.length === 0) {
-        console.debug("searchShowsByFilters - no shows found", { keys: Object.keys(resp ?? {}) });
-        return [];
+    // Only add genres if we have valid ones (avoid empty array causing 400)
+    if (genres && genres.length > 0) {
+        params.genres = genres;
     }
 
-    // Map API shows to our internal format
-    return apiShows.map((apiShow) => mapApiShowToShow(apiShow, country));
+    console.debug("searchShowsByFilters - calling API with params", { catalogs, genres, country, showType });
+
+    try {
+        const resp = await client.showsApi.searchShowsByFilters(params as any);
+
+        // Extract the shows array from the response
+        const apiShows = extractArrayFromResponse(resp) as ApiShow[];
+
+        if (!apiShows || apiShows.length === 0) {
+            console.debug("searchShowsByFilters - no shows found", { keys: Object.keys(resp ?? {}) });
+            return [];
+        }
+
+        // Map API shows to our internal format
+        return apiShows.map((apiShow) => mapApiShowToShow(apiShow, country));
+    } catch (err: any) {
+        if (err.response) {
+            try {
+                const errorBody = await err.response.text();
+                console.debug("searchShowsByFilters - API error response body:", errorBody);
+            } catch {
+                console.debug("searchShowsByFilters - could not read error body");
+            }
+        }
+        throw err;
+    }
 }
 
 function extractArrayFromResponse(obj: any): any[] | undefined {

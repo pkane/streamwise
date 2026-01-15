@@ -74,7 +74,7 @@ export function mapApiShowToShow(apiShow: ApiShow, country = "us"): Show {
         year: apiShow.releaseYear ?? apiShow.firstAirYear,
         genres: apiShow.genres.map((g) => g.id),
         serviceId: firstService,
-        popularity: apiShow.rating ? Math.round(apiShow.rating * 10) : undefined,
+        popularity: apiShow.rating ? Math.round(apiShow.rating) : undefined,
         overview: apiShow.overview,
         actors: apiShow.cast?.slice(0, 2),
         imageSet: apiShow.imageSet,

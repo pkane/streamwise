@@ -1,10 +1,11 @@
 export const DEFAULT_SERVICES = [
     { id: "netflix", serviceId: "netflix", name: "Netflix", monthlyPrice: 15.49, status: "active", relevanceScore: 0.9 },
-    { id: "max", serviceId: "max", name: "Max", monthlyPrice: 9.99, status: "paused", relevanceScore: 0.7 },
+    { id: "hbo", serviceId: "hbo", name: "Max", monthlyPrice: 9.99, status: "paused", relevanceScore: 0.7 },
     { id: "hulu", serviceId: "hulu", name: "Hulu", monthlyPrice: 7.99, status: "always", relevanceScore: 0.5 },
     { id: "apple", serviceId: "apple", name: "Apple TV+", monthlyPrice: 4.99, status: "paused" },
     { id: "prime", serviceId: "prime", name: "Prime Video", monthlyPrice: 8.99, status: "paused" },
     { id: "disney", serviceId: "disney", name: "Disney+", monthlyPrice: 7.99, status: "paused" },
+    { id: "peacock", serviceId: "peacock", name: "Peacock", monthlyPrice: 5.99, status: "paused" },
 ];
 
 // Detailed genre options with ids used by the external API
