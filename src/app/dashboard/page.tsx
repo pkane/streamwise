@@ -76,13 +76,10 @@ export default function Dashboard(): JSX.Element {
     const [recommended, setRecommended] = useState<Show[]>([]);
     const [optimizedServices, setOptimizedServices] = useState<OptimizedService[]>([]);
     const [services, setServices] = useState<string[]>([]);
-    const [genres, setGenres] = useState<string[]>([]);
-    const [statuses, setStatuses] = useState<Record<string, string>>({});
-    const [showSignals, setShowSignals] = useState<Record<string, string>>({});
-    const [releasePreference, setReleasePreference] = useState<string>("mixed");
     const [targetBudget, setTargetBudget] = useState<number | null>(null);
     const [totalMonthlyCost, setTotalMonthlyCost] = useState<number>(0);
     const [loading, setLoading] = useState(true);
+    const [confirmed, setConfirmed] = useState(false);
 
     // Helper to load and fetch data
     const loadData = async (
@@ -127,22 +124,18 @@ export default function Dashboard(): JSX.Element {
                 const genreRaw = localStorage.getItem("streamwise_user_genres");
                 const userGenres = genreRaw ? JSON.parse(genreRaw) as string[] : [];
                 const currentGenres = userGenres.length ? userGenres : ["crime"];
-                setGenres(currentGenres);
 
                 // Load service statuses
                 const statusKey = "streamwise_user_service_statuses";
                 const statusRaw = localStorage.getItem(statusKey);
                 const statusMap = statusRaw ? (JSON.parse(statusRaw) as Record<string, string>) : {};
-                setStatuses(statusMap);
 
                 // Load show signals
                 const signalsRaw = localStorage.getItem("streamwise_user_showSignals");
                 const signals = signalsRaw ? JSON.parse(signalsRaw) as Record<string, string> : {};
-                setShowSignals(signals);
 
                 // Load release preference
                 const relPref = localStorage.getItem("streamwise_user_releasePreference") ?? "mixed";
-                setReleasePreference(relPref);
 
                 // Load budget
                 const tb = localStorage.getItem("streamwise_user_targetBudget");
@@ -173,7 +166,6 @@ export default function Dashboard(): JSX.Element {
                 setRecommended([]);
                 setOptimizedServices([]);
                 setServices(["netflix", "hbo"]);
-                setGenres(["crime"]);
                 setTargetBudget(null);
                 setLoading(false);
             }
@@ -190,23 +182,41 @@ export default function Dashboard(): JSX.Element {
     // Compute active service IDs for show display
     const activeServiceIds = new Set(activeOptimizedServices.map((s) => s.serviceId));
 
-    const handleStatusToggle = async (svc: OptimizedService) => {
-        // Cycle through statuses: active -> paused -> always -> active
+    const handleStatusToggle = (svc: OptimizedService) => {
+        // Cycle locally without re-fetching: active -> paused -> always -> active
         const order = ["active", "paused", "always"] as const;
         const cur = svc.recommendedStatus || "paused";
-        const idx = order.indexOf(cur);
-        const next = order[(idx + 1) % order.length];
+        const next = order[(order.indexOf(cur) + 1) % order.length];
 
-        // Update local statuses
-        const newStatuses = { ...statuses, [svc.serviceId]: next };
-        setStatuses(newStatuses);
+        const updated = optimizedServices.map((s) =>
+            s.serviceId === svc.serviceId ? { ...s, recommendedStatus: next } : s
+        );
+        setOptimizedServices(updated);
+        setTotalMonthlyCost(
+            updated
+                .filter((s) => s.recommendedStatus === "active" || s.recommendedStatus === "always")
+                .reduce((sum, s) => sum + s.monthlyPrice, 0)
+        );
+        setConfirmed(false);
+    };
+
+    const handleConfirm = () => {
+        const newStatuses: Record<string, string> = {};
+        const activeIds: string[] = [];
+        for (const svc of optimizedServices) {
+            newStatuses[svc.serviceId] = svc.recommendedStatus;
+            if (svc.recommendedStatus === "active" || svc.recommendedStatus === "always") {
+                activeIds.push(svc.serviceId);
+            }
+        }
+
         localStorage.setItem("streamwise_user_service_statuses", JSON.stringify(newStatuses));
+        localStorage.setItem("streamwise_user_services", JSON.stringify(activeIds));
+        localStorage.setItem("streamwise_optimized_services", JSON.stringify(optimizedServices));
+        localStorage.setItem("streamwise_recommendations", JSON.stringify(recommended));
 
-        // Clear cache and refetch
-        localStorage.removeItem("streamwise_recommendations");
-        localStorage.removeItem("streamwise_optimized_services");
-
-        await loadData(services, genres, showSignals, releasePreference, targetBudget, newStatuses);
+        setServices(activeIds);
+        setConfirmed(true);
     };
 
     return (
@@ -214,40 +224,54 @@ export default function Dashboard(): JSX.Element {
             <main className="mx-auto max-w-4xl pb-6">
                 <header className="mb-8 py-12">
                     <h1 className="text-3xl font-semibold dark:text-zinc-50">Your Dashboard</h1>
-                    <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-                        {activeOptimizedServices.length > 0
-                            ? `Recommended: ${activeOptimizedServices.map((s) => s.name).join(", ")}`
-                            : `Selected services: ${services.join(", ")}`}
-                        {" "} • ${totalMonthlyCost.toFixed(2)}/mo
+                    <h2 className="mt-8">
+                        <span className="text-2xl text-white font-bold">${totalMonthlyCost.toFixed(2)}/mo</span>
                         {targetBudget !== null && (
                             <span className={totalMonthlyCost <= targetBudget ? "text-green-600" : "text-amber-600"}>
                                 {" "}({totalMonthlyCost <= targetBudget ? "under" : "over"} ${targetBudget} target)
                             </span>
                         )}
+                    </h2>
+                    <p className=" text-zinc-600 dark:text-zinc-400">
+                        {activeOptimizedServices.length > 0
+                            ? `Recommended: ${activeOptimizedServices.map((s) => s.name).join(", ")}`
+                            : `Selected services: ${services.join(", ")}`}
+                        {" "}
                     </p>
                 </header>
 
                 <section className="mb-8">
-                    <h2 className="text-xl font-medium mb-4 dark:text-zinc-50">Recommended Services</h2>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-medium dark:text-zinc-50">Recommended Services</h2>
+                        <button
+                            onClick={handleConfirm}
+                            disabled={loading}
+                            className="px-4 py-1.5 text-sm font-medium rounded-md bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                        >
+                            {confirmed ? "Confirmed!" : "Confirm"}
+                        </button>
+                    </div>
                     <p className="text-sm text-zinc-500 mb-4 dark:text-zinc-400">
-                        Based on your taste and budget, these services offer the best value. Toggle status to adjust.
+                        Based on your taste and budget, these services offer the best value. Toggle to adjust, then confirm.
                     </p>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        {activeOptimizedServices
-                            .sort((a, b) => {
-                                const statusOrder = { always: 0, active: 1 };
-                                return (statusOrder[a.recommendedStatus as keyof typeof statusOrder] ?? 2) -
-                                       (statusOrder[b.recommendedStatus as keyof typeof statusOrder] ?? 2);
-                            })
-                            .map((svc) => (
-                                <div key={svc.serviceId} className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+                        {optimizedServices.map((svc) => {
+                            const isActive = svc.recommendedStatus === "active" || svc.recommendedStatus === "always";
+                            return (
+                                <div
+                                    key={svc.serviceId}
+                                    className={`rounded-lg border p-4 shadow-sm transition-opacity ${isActive
+                                        ? "border-zinc-200 bg-white"
+                                        : "border-dashed border-zinc-300 bg-zinc-50 opacity-50 dark:bg-zinc-900"
+                                        }`}
+                                >
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <h3 className="text-lg font-semibold">{svc.name}</h3>
+                                            <h3 className={`text-lg font-semibold ${!isActive ? "dark:text-zinc-50" : ""}`}>{svc.name}</h3>
                                             <p className="text-sm text-zinc-500">${svc.monthlyPrice.toFixed(2)} / month</p>
                                             <p className="text-xs text-zinc-400">{svc.showCount} shows for you</p>
                                         </div>
-                                        <div className="text-sm font-medium text-zinc-700">
+                                        <div className="text-sm font-medium text-zinc-700 dark:text-zinc-400">
                                             <button
                                                 onClick={() => handleStatusToggle(svc)}
                                                 className="underline"
@@ -257,7 +281,8 @@ export default function Dashboard(): JSX.Element {
                                         </div>
                                     </div>
                                 </div>
-                            ))}
+                            );
+                        })}
                     </div>
                 </section>
 
@@ -289,9 +314,8 @@ export default function Dashboard(): JSX.Element {
                                 return (
                                     <div
                                         key={show.showId}
-                                        className={`rounded-lg border bg-white p-4 shadow-sm ${
-                                            isFromActiveService ? "border-zinc-200" : "border-dashed border-zinc-300 opacity-80"
-                                        }`}
+                                        className={`rounded-lg border bg-white p-4 shadow-sm ${isFromActiveService ? "border-zinc-200" : "border-dashed border-zinc-300 opacity-80"
+                                            }`}
                                     >
                                         <div className="flex items-start gap-4">
                                             <div className="w-28 shrink-0">
