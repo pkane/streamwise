@@ -156,8 +156,13 @@ export default function Dashboard(): JSX.Element {
                 const cachedRec = localStorage.getItem("streamwise_recommendations");
                 const cachedServices = localStorage.getItem("streamwise_optimized_services");
                 if (cachedRec && cachedServices) {
+                    const parsedServices = JSON.parse(cachedServices) as OptimizedService[];
                     setRecommended(JSON.parse(cachedRec));
-                    setOptimizedServices(JSON.parse(cachedServices));
+                    setOptimizedServices(parsedServices);
+                    const cachedCost = parsedServices
+                        .filter((s) => s.recommendedStatus === "active" || s.recommendedStatus === "always")
+                        .reduce((sum, s) => sum + s.monthlyPrice, 0);
+                    setTotalMonthlyCost(cachedCost);
                     setLoading(false);
                 } else {
                     // Fetch fresh recommendations from API

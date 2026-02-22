@@ -63,10 +63,15 @@ export interface Show {
 }
 
 // Helper to map an API Show to our internal Show format
-export function mapApiShowToShow(apiShow: ApiShow, country = "us"): Show {
-    // Extract the first service from streamingOptions for serviceId
-    const countryOptions = apiShow.streamingOptions?.[country] ?? [];
-    const firstService = countryOptions[0]?.service?.id ?? "unknown";
+export function mapApiShowToShow(apiShow: ApiShow, country = "us", preferredCatalogs?: string[]): Show {
+    const countryOptions = (apiShow.streamingOptions?.[country] ?? [])
+        .filter((o) => (o as { type?: string })?.type === "subscription");
+    // Prefer a service the user actually filtered by, since streamingOptions[0]
+    // may be a different service the show also happens to be available on.
+    const matchedOption = preferredCatalogs?.length
+        ? (countryOptions.find((o) => preferredCatalogs.includes((o as { service?: { id?: string } })?.service?.id ?? "")) ?? countryOptions[0])
+        : countryOptions[0];
+    const firstService = matchedOption?.service?.id ?? "unknown";
 
     return {
         showId: apiShow.id,

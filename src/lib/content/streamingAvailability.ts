@@ -49,7 +49,7 @@ export async function searchShowsByFilters(
         }
 
         // Map API shows to our internal format
-        return apiShows.map((apiShow) => mapApiShowToShow(apiShow, country));
+        return apiShows.map((apiShow) => mapApiShowToShow(apiShow, country, catalogs));
     } catch (err: any) {
         if (err.response) {
             try {
@@ -137,9 +137,9 @@ export async function fetchShowsFromRapidAPI(
 
 function extractServiceId(streamingOptions: any, country: string): string {
     if (!streamingOptions) return "unknown";
-    const countryOptions = streamingOptions[country];
-    if (Array.isArray(countryOptions) && countryOptions.length > 0) {
-        return countryOptions[0]?.service?.id ?? "unknown";
-    }
-    return "unknown";
+    const countryOptions = Array.isArray(streamingOptions[country])
+        ? (streamingOptions[country] as { type?: string; service?: { id?: string } }[])
+              .filter((o) => o?.type === "subscription")
+        : [];
+    return countryOptions[0]?.service?.id ?? "unknown";
 }

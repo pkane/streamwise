@@ -208,6 +208,8 @@ export interface ServiceContentValue {
     monthlyPrice: number;
     /** Number of top-scored shows from this service */
     showCount: number;
+    /** Number of top-scored shows with popularity >= 85 */
+    highQualityShowCount: number;
     /** Sum of show scores from this service */
     totalScore: number;
     /** Average score per show */
@@ -302,21 +304,23 @@ export function optimizeServices(
     const serviceValueMap = new Map<string, {
         showCount: number;
         totalScore: number;
+        highQualityShowCount: number;
         shows: Show[];
     }>();
 
     for (const { show, score } of topShows) {
         const svcId = show.serviceId;
-        const existing = serviceValueMap.get(svcId) || { showCount: 0, totalScore: 0, shows: [] };
+        const existing = serviceValueMap.get(svcId) || { showCount: 0, totalScore: 0, highQualityShowCount: 0, shows: [] };
         existing.showCount++;
         existing.totalScore += score;
+        if ((show.popularity ?? 0) >= 85) existing.highQualityShowCount++;
         existing.shows.push(show);
         serviceValueMap.set(svcId, existing);
     }
 
     // Build service content value objects
     const serviceContentValues: ServiceContentValue[] = allServices.map((svc) => {
-        const value = serviceValueMap.get(svc.serviceId) || { showCount: 0, totalScore: 0, shows: [] };
+        const value = serviceValueMap.get(svc.serviceId) || { showCount: 0, totalScore: 0, highQualityShowCount: 0, shows: [] };
         const originalStatus = serviceStatuses[svc.serviceId] ?? svc.status;
         const isAlwaysKeep = originalStatus === "always";
 
@@ -326,6 +330,7 @@ export function optimizeServices(
             monthlyPrice: svc.monthlyPrice,
             showCount: value.showCount,
             totalScore: value.totalScore,
+            highQualityShowCount: value.highQualityShowCount,
             avgScore: value.showCount > 0 ? value.totalScore / value.showCount : 0,
             valueRatio: svc.monthlyPrice > 0 ? value.totalScore / svc.monthlyPrice : 0,
             isAlwaysKeep,
@@ -356,6 +361,11 @@ export function optimizeServices(
 
         // Skip services with no content value
         if (svc.showCount === 0) continue;
+
+        // For services the user never explicitly selected, require at least 2 high-quality
+        // shows (popularity >= 85) before recommending them
+        const isUserSelected = svc.serviceId in serviceStatuses;
+        if (!isUserSelected && svc.highQualityShowCount < 2) continue;
 
         const newTotal = budgetUsed + svc.monthlyPrice;
 
