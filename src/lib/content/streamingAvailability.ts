@@ -8,59 +8,67 @@ const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY ?? "178f0cb199mshc0a4017a852f94ap1
 
 /**
  * Search shows using the streaming-availability SDK.
- * Returns internal Show[] format (already mapped from API response).
+ * Follows cursor pagination until `maxResults` shows are collected or the API
+ * reports no more results. Capped at 3 API calls to bound latency.
+ *
+ * @param maxResults - target number of shows to return (default 20, one page)
  */
 export async function searchShowsByFilters(
     catalogs: string[],
     genres: string[],
     country = "us",
-    showType: "series" | "movie" = "series"
+    showType: "series" | "movie" = "series",
+    maxResults = 20
 ): Promise<Show[]> {
     const client = new streamingAvailability.Client(
         new streamingAvailability.Configuration({ apiKey: RAPIDAPI_KEY })
     );
 
-    // The SDK's `searchShowsByFilters` expects an object with filters
-    // Note: API uses snake_case for some params but SDK may convert them
-    const params: any = {
-        catalogs,
-        country,
-        showType,
-        genresRelation: "or",
-        ratingMin: 80
-    };
+    const results: Show[] = [];
+    let cursor: string | undefined;
+    const MAX_PAGES = 3; // 3 × 20 = 60 max; enough to satisfy a 48-show target
 
-    // Only add genres if we have valid ones (avoid empty array causing 400)
-    if (genres && genres.length > 0) {
-        params.genres = genres;
-    }
+    console.debug("searchShowsByFilters - starting paginated fetch", { catalogs, genres, country, showType, maxResults });
 
-    console.debug("searchShowsByFilters - calling API with params", { catalogs, genres, country, showType });
+    for (let page = 0; page < MAX_PAGES && results.length < maxResults; page++) {
+        const params: any = {
+            catalogs,
+            country,
+            showType,
+            genresRelation: "or",
+            ratingMin: 80,
+        };
+        if (genres && genres.length > 0) params.genres = genres;
+        if (cursor) params.cursor = cursor;
 
-    try {
-        const resp = await client.showsApi.searchShowsByFilters(params as any);
+        try {
+            const resp = await client.showsApi.searchShowsByFilters(params as any);
 
-        // Extract the shows array from the response
-        const apiShows = extractArrayFromResponse(resp) as ApiShow[];
-
-        if (!apiShows || apiShows.length === 0) {
-            console.debug("searchShowsByFilters - no shows found", { keys: Object.keys(resp ?? {}) });
-            return [];
-        }
-
-        // Map API shows to our internal format
-        return apiShows.map((apiShow) => mapApiShowToShow(apiShow, country, catalogs));
-    } catch (err: any) {
-        if (err.response) {
-            try {
-                const errorBody = await err.response.text();
-                console.debug("searchShowsByFilters - API error response body:", errorBody);
-            } catch {
-                console.debug("searchShowsByFilters - could not read error body");
+            const apiShows: ApiShow[] = resp.shows ?? (extractArrayFromResponse(resp) as ApiShow[]) ?? [];
+            if (apiShows.length === 0) {
+                console.debug("searchShowsByFilters - empty page", { page });
+                break;
             }
+
+            results.push(...apiShows.map((s) => mapApiShowToShow(s, country, catalogs)));
+            console.debug("searchShowsByFilters - page", page + 1, "fetched", apiShows.length, "total", results.length);
+
+            if (!resp.hasMore || !resp.nextCursor) break;
+            cursor = resp.nextCursor;
+        } catch (err: any) {
+            if (err.response) {
+                try {
+                    const errorBody = await err.response.text();
+                    console.debug("searchShowsByFilters - API error body:", errorBody);
+                } catch {
+                    console.debug("searchShowsByFilters - could not read error body");
+                }
+            }
+            throw err;
         }
-        throw err;
     }
+
+    return results.slice(0, maxResults);
 }
 
 function extractArrayFromResponse(obj: any): any[] | undefined {

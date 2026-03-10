@@ -53,6 +53,9 @@ export interface Show {
     showId: string;        // mapped from API's `id`
     title: string;
     year?: number;         // mapped from API's `releaseYear` or `firstAirYear`
+    lastAirYear?: number;  // mapped from API's `lastAirYear` (series only)
+    tmdbId?: string;       // TMDB series id, used for next-episode enrichment
+    nextEpisodeAirDate?: string; // ISO date string from TMDB's next_episode_to_air.air_date
     genres: Genre[];       // mapped from API's Genre[] objects to just id strings
     serviceId: string;     // derived from streamingOptions - first available service
     popularity?: number;   // 0..100, derived from API's `rating` (scaled)
@@ -77,6 +80,8 @@ export function mapApiShowToShow(apiShow: ApiShow, country = "us", preferredCata
         showId: apiShow.id,
         title: apiShow.title,
         year: apiShow.releaseYear ?? apiShow.firstAirYear,
+        lastAirYear: apiShow.lastAirYear,
+        tmdbId: apiShow.tmdbId,
         genres: apiShow.genres.map((g) => g.id),
         serviceId: firstService,
         popularity: apiShow.rating ? Math.round(apiShow.rating) : undefined,

@@ -3,6 +3,7 @@ import type { UserProfile, UserService, Show } from "../../../models/types";
 import { recommendShows, optimizeServices } from "../../../lib/recommendations";
 import type { RecommendNextWatchOptions, ShowSignal } from "../../../lib/recommendations";
 import { searchShowsByFilters } from "../../../lib/content/streamingAvailability";
+import { enrichShowsWithTmdbData } from "../../../lib/content/tmdb";
 import { DEFAULT_SERVICES, GENRES } from "../../../data/constants";
 // import { mockShows } from "../../../data/mockShows";
 
@@ -84,26 +85,29 @@ export async function GET(req: NextRequest) {
     const userServiceIds = services.map((s) => s.serviceId);
 
     // Fetch shows from streaming-availability API
+    const TARGET_POOL = 48;
     let pool: Show[] = [];
     try {
-        // First, search within user's selected services
+        // Paginated fetch for user's selected services (up to TARGET_POOL results)
         pool = await searchShowsByFilters(
             userServiceIds,
             genreIds,
             "us",
-            "series"
+            "series",
+            TARGET_POOL
         );
-        console.debug("/api/shows - API returned from user services", { count: pool.length });
+        console.debug("/api/shows - paginated fetch from user services", { count: pool.length });
 
-        // If we don't have enough results (< 12), broaden search to all services
-        if (pool.length < 12) {
+        // If the pool is still thin (< 24), broaden to all services for one extra page
+        if (pool.length < 24) {
             const additionalPool = await searchShowsByFilters(
                 allServiceIds,
                 genreIds,
                 "us",
-                "series"
+                "series",
+                TARGET_POOL
             );
-            console.debug("/api/shows - API returned from all services", { count: additionalPool.length });
+            console.debug("/api/shows - broadened to all services", { count: additionalPool.length });
 
             // Merge and dedupe by showId
             const existingIds = new Set(pool.map((s) => s.showId));
@@ -134,6 +138,15 @@ export async function GET(req: NextRequest) {
     //         return true;
     //     });
     // }
+
+    // Enrich pool with TMDB next-episode data for upcoming season badges
+    if (pool.length > 0) {
+        try {
+            pool = await enrichShowsWithTmdbData(pool);
+        } catch (e) {
+            console.debug("/api/shows - TMDB enrichment failed", e);
+        }
+    }
 
     // Parse additional options
     let showSignals: Record<string, ShowSignal> = {};
@@ -180,11 +193,11 @@ export async function GET(req: NextRequest) {
 
     if (useNextWatch) {
         // Use optimizeServices to get both optimized service recommendations and shows
-        const result = optimizeServices(user, allServices, pool, options, 24);
+        const result = optimizeServices(user, allServices, pool, options, 40);
 
         // Return the full result with optimized services
         return NextResponse.json({
-            shows: result.shows.slice(0, 16),
+            shows: result.shows.slice(0, 48),
             services: result.services,
             totalMonthlyCost: result.totalMonthlyCost,
             budgetRemaining: result.budgetRemaining,

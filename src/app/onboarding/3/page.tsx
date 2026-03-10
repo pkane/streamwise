@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Show } from "../../../models/types";
 import { GENRES } from "../../../data/constants";
+import { getSeasonLabel } from "../../../lib/seasonUtils";
 
 // SCREEN 3 — Taste Calibration
 // 3A: Genres multi-select
@@ -192,6 +193,12 @@ export default function Onboarding3() {
                                                 <div className="flex-1">
                                                     <div className="font-medium">{(show as any).title ?? (show as any).name}</div>
                                                     <div className="text-sm text-zinc-500">{((show as any).serviceId ?? "").replace?.("svc_", "")}</div>
+                                                    {(() => {
+                                                        const label = getSeasonLabel(show);
+                                                        if (label === "new") return <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">New season</span>;
+                                                        if (label === "soon") return <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Season coming soon</span>;
+                                                        return null;
+                                                    })()}
                                                 </div>
                                                 <div className="flex gap-2 flex-wrap md:flex-nowrap">
                                                     <button onClick={() => setSignal(sid, "seen")} className={`basis-full md:basis-auto px-2 py-1 rounded ${showSignals[sid] === "seen" ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}>Seen</button>

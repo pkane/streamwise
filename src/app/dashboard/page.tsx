@@ -1,9 +1,15 @@
 "use client";
 
 import { JSX } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Show } from "../../models/types";
 import { DEFAULT_SERVICES } from "../../data/constants";
+import { getSeasonLabel } from "../../lib/seasonUtils";
+
+// Bump this string whenever the recommendation algorithm changes to invalidate stale caches.
+const CACHE_VERSION = "v2";
+const PAGE_SIZE = 8;
+const MAX_PAGES = 6;
 
 // Build service catalog from constants for consistent data
 const SERVICE_CATALOG = DEFAULT_SERVICES.reduce((acc, s) => {
@@ -80,6 +86,9 @@ export default function Dashboard(): JSX.Element {
     const [totalMonthlyCost, setTotalMonthlyCost] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [confirmed, setConfirmed] = useState(false);
+    const [sortOrder, setSortOrder] = useState<"recommended" | "popularity" | "az">("recommended");
+    const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+    const [page, setPage] = useState(1);
 
     // Helper to load and fetch data
     const loadData = async (
@@ -145,6 +154,13 @@ export default function Dashboard(): JSX.Element {
                 }
                 setTargetBudget(currentBudget);
 
+                // Invalidate cache if algorithm version has changed
+                if (localStorage.getItem("streamwise_cache_version") !== CACHE_VERSION) {
+                    localStorage.removeItem("streamwise_recommendations");
+                    localStorage.removeItem("streamwise_optimized_services");
+                    localStorage.setItem("streamwise_cache_version", CACHE_VERSION);
+                }
+
                 // Check for cached data
                 const cachedRec = localStorage.getItem("streamwise_recommendations");
                 const cachedServices = localStorage.getItem("streamwise_optimized_services");
@@ -200,6 +216,32 @@ export default function Dashboard(): JSX.Element {
         setConfirmed(false);
     };
 
+    // Reset view state when fresh recommendations arrive
+    useEffect(() => {
+        setDismissed(new Set());
+        setPage(1);
+    }, [recommended]);
+
+    const handleDismiss = (showId: string) => {
+        setDismissed((prev) => new Set([...prev, showId]));
+    };
+
+    // Sorted + filtered list (memoized to avoid re-sorting on every render)
+    const sortedShows = useMemo(() => {
+        const visible = recommended.filter((s) => !dismissed.has(s.showId));
+        if (sortOrder === "popularity") {
+            return [...visible].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+        }
+        if (sortOrder === "az") {
+            return [...visible].sort((a, b) => a.title.localeCompare(b.title));
+        }
+        return visible;
+    }, [recommended, dismissed, sortOrder]);
+
+    const totalPages = Math.min(Math.ceil(sortedShows.length / PAGE_SIZE), MAX_PAGES);
+    const clampedPage = Math.min(page, totalPages || 1);
+    const pageShows = sortedShows.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+
     const handleConfirm = () => {
         const newStatuses: Record<string, string> = {};
         const activeIds: string[] = [];
@@ -225,7 +267,7 @@ export default function Dashboard(): JSX.Element {
                 <header className="mb-8 py-12">
                     <h1 className="text-3xl font-semibold dark:text-zinc-50">Your Dashboard</h1>
                     <h2 className="mt-8">
-                        <span className="text-2xl text-white font-bold">${totalMonthlyCost.toFixed(2)}/mo</span>
+                        <span className="text-2xl dark:text-white font-bold">${totalMonthlyCost.toFixed(2)}/mo</span>
                         {targetBudget !== null && (
                             <span className={totalMonthlyCost <= targetBudget ? "text-green-600" : "text-amber-600"}>
                                 {" "}({totalMonthlyCost <= targetBudget ? "under" : "over"} ${targetBudget} target)
@@ -287,7 +329,30 @@ export default function Dashboard(): JSX.Element {
                 </section>
 
                 <section>
-                    <h2 className="text-xl font-medium mb-4 dark:text-zinc-50">What to Watch</h2>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-medium dark:text-zinc-50">What to Watch</h2>                
+                        {!loading && recommended.length > 0 && (
+                            <div className="flex items-center gap-1 text-sm">
+                                {(["recommended", "popularity", "az"] as const).map((opt) => (
+                                    <button
+                                        key={opt}
+                                        onClick={() => { setSortOrder(opt); setPage(1); }}
+                                        className={`px-2.5 py-1 rounded-md transition-colors ${
+                                            sortOrder === opt
+                                                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                                                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                                        }`}
+                                    >
+                                        {opt === "recommended" ? "Recommended" : opt === "popularity" ? "Popularity" : "A–Z"}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <p className="w-2/3 text-sm text-zinc-500 mb-4 dark:text-zinc-400">
+                        Here are your recommended shows. You can clear any you don't want. The rest will get saved for later.
+                    </p>
+
                     {loading ? (
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             {Array.from({ length: 6 }).map((_, i) => (
@@ -304,49 +369,85 @@ export default function Dashboard(): JSX.Element {
                                 </div>
                             ))}
                         </div>
-                    ) : recommended.length === 0 ? (
+                    ) : sortedShows.length === 0 ? (
                         <p className="text-zinc-500">No recommendations found. Try adjusting your genre preferences.</p>
                     ) : (
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            {recommended.map((show) => {
-                                const isFromActiveService = activeServiceIds.has(show.serviceId);
-                                const serviceName = SERVICE_CATALOG[show.serviceId]?.name ?? show.serviceId;
-                                return (
-                                    <div
-                                        key={show.showId}
-                                        className={`rounded-lg border bg-white p-4 shadow-sm ${isFromActiveService ? "border-zinc-200" : "border-dashed border-zinc-300 opacity-80"
-                                            }`}
-                                    >
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-28 shrink-0">
-                                                <img
-                                                    src={show.imageSet?.verticalPoster?.w360 ?? "/vertical-poster.svg"}
-                                                    width={112}
-                                                    height={168}
-                                                    alt={`${show.title} poster`}
-                                                    className="rounded-sm object-cover w-full"
-                                                />
-                                            </div>
-                                            <div className="flex-1">
-                                                <h3 className="text-lg font-semibold">{show.title}</h3>
-                                                <p className="text-sm text-zinc-500">{show.year} • {show.genres.join(", ")}</p>
-                                                <p className="mt-2 text-sm text-zinc-600 line-clamp-3">{show.overview ?? "No overview available."}</p>
-                                                {show.actors && show.actors.length > 0 && (
-                                                    <p className="mt-2 text-sm text-zinc-500">Starring: {show.actors.slice(0, 2).join(", ")}</p>
-                                                )}
-                                                <div className="mt-3 text-sm flex items-center justify-between">
-                                                    <span className={isFromActiveService ? "text-zinc-700 font-medium" : "text-zinc-400"}>
-                                                        {serviceName}
-                                                        {!isFromActiveService && " (not active)"}
-                                                    </span>
-                                                    {show.popularity && <span className="text-zinc-400">pop {show.popularity}</span>}
+                        <>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                {pageShows.map((show) => {
+                                    const isFromActiveService = activeServiceIds.has(show.serviceId);
+                                    const serviceName = SERVICE_CATALOG[show.serviceId]?.name ?? show.serviceId;
+                                    return (
+                                        <div
+                                            key={show.showId}
+                                            className={`relative rounded-lg border bg-white p-4 shadow-sm ${isFromActiveService ? "border-zinc-200" : "border-dashed border-zinc-300 opacity-80"}`}
+                                        >
+                                            <button
+                                                onClick={() => handleDismiss(show.showId)}
+                                                aria-label={`Dismiss ${show.title}`}
+                                                className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                                            >
+                                                ✕
+                                            </button>
+                                            <div className="flex items-start gap-4">
+                                                <div className="w-28 shrink-0">
+                                                    <img
+                                                        src={show.imageSet?.verticalPoster?.w360 ?? "/vertical-poster.svg"}
+                                                        width={112}
+                                                        height={168}
+                                                        alt={`${show.title} poster`}
+                                                        className="rounded-sm object-cover w-full"
+                                                    />
+                                                </div>
+                                                <div className="flex-1 pr-4">
+                                                    <h3 className="text-lg font-semibold">{show.title}</h3>
+                                                    {(() => {
+                                                        const label = getSeasonLabel(show);
+                                                        if (label === "new") return <span className="inline-block mt-0.5 mb-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">New season</span>;
+                                                        if (label === "soon") return <span className="inline-block mt-0.5 mb-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Season coming soon</span>;
+                                                        return null;
+                                                    })()}
+                                                    <p className="text-sm text-zinc-500">{show.year} • {show.genres.join(", ")}</p>
+                                                    <p className="mt-2 text-sm text-zinc-600 line-clamp-3">{show.overview ?? "No overview available."}</p>
+                                                    {show.actors && show.actors.length > 0 && (
+                                                        <p className="mt-2 text-sm text-zinc-500">Starring: {show.actors.slice(0, 2).join(", ")}</p>
+                                                    )}
+                                                    <div className="mt-3 text-sm flex items-center justify-between">
+                                                        <span className={isFromActiveService ? "text-zinc-700 font-medium" : "text-zinc-400"}>
+                                                            {serviceName}
+                                                            {!isFromActiveService && " (not active)"}
+                                                        </span>
+                                                        {show.popularity && <span className="text-zinc-400">pop {show.popularity}</span>}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-center gap-3 mt-6">
+                                    <button
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        disabled={clampedPage === 1}
+                                        className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:hover:bg-zinc-800"
+                                    >
+                                        ← Prev
+                                    </button>
+                                    <span className="text-sm text-zinc-500">
+                                        {clampedPage} / {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={clampedPage === totalPages}
+                                        className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:hover:bg-zinc-800"
+                                    >
+                                        Next →
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </section>
             </main>

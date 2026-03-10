@@ -362,11 +362,6 @@ export function optimizeServices(
         // Skip services with no content value
         if (svc.showCount === 0) continue;
 
-        // For services the user never explicitly selected, require at least 2 high-quality
-        // shows (popularity >= 85) before recommending them
-        const isUserSelected = svc.serviceId in serviceStatuses;
-        if (!isUserSelected && svc.highQualityShowCount < 2) continue;
-
         const newTotal = budgetUsed + svc.monthlyPrice;
 
         if (newTotal <= budgetLimit) {
@@ -378,12 +373,9 @@ export function optimizeServices(
                 (s) => s.recommendedStatus === "active" && !s.isAlwaysKeep
             );
 
-            // Find if swapping makes sense
             for (const active of activeServices) {
-                // Would swapping this service for the new one fit in budget and increase value?
                 const swapBudget = budgetUsed - active.monthlyPrice + svc.monthlyPrice;
                 if (swapBudget <= budgetLimit && svc.valueRatio > active.valueRatio) {
-                    // Swap: deactivate old, activate new
                     active.recommendedStatus = "paused";
                     svc.recommendedStatus = "active";
                     budgetUsed = swapBudget;
@@ -400,20 +392,19 @@ export function optimizeServices(
             .map((s) => s.serviceId)
     );
 
-    // Filter and sort shows by active services first
+    // Only return shows from active/always services — avoids "(not active)" shows
     const filteredShows = scoredShows
         .filter(({ show }) => activeServiceIds.has(show.serviceId))
         .map(({ show }) => show);
 
-    // Also include shows from non-active services at the end (for discovery)
-    const nonActiveShows = scoredShows
-        .filter(({ show }) => !activeServiceIds.has(show.serviceId))
-        .slice(0, 8) // Limit non-active suggestions
-        .map(({ show }) => show);
+    // Only return services that have relevant content or are always-keep
+    const relevantServices = serviceContentValues.filter(
+        (s) => s.showCount > 0 || s.isAlwaysKeep
+    );
 
     return {
-        services: serviceContentValues,
-        shows: [...filteredShows, ...nonActiveShows],
+        services: relevantServices,
+        shows: filteredShows,
         totalMonthlyCost: budgetUsed,
         budgetRemaining: targetBudget !== null ? targetBudget - budgetUsed : null,
     };
