@@ -7,7 +7,7 @@ import { DEFAULT_SERVICES } from "../../data/constants";
 import { getSeasonLabel } from "../../lib/seasonUtils";
 
 // Bump this string whenever the recommendation algorithm changes to invalidate stale caches.
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const PAGE_SIZE = 8;
 const MAX_PAGES = 6;
 

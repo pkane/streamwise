@@ -11,9 +11,10 @@ const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
  * "new"  — a subscription streaming option has `availableSince` within the last 6 months.
  *           This is the most precise signal the streaming API provides (Unix timestamp).
  *
- * "soon" — the show has a confirmed next episode air date (from TMDB) within 3 months,
- *           OR its `lastAirYear` is in the future (year-granular fallback when TMDB data
- *           is unavailable).
+ * "soon" — in priority order:
+ *   1. Confirmed next episode air date (TMDB) within 3 months.
+ *   2. TMDB status "Returning Series" with an announced-but-unscheduled future season.
+ *   3. `lastAirYear` in the future (year-granular fallback when TMDB data is unavailable).
  *
  * Returns null if neither condition applies.
  */
@@ -27,6 +28,12 @@ export function getSeasonLabel(show: Show, country = "us"): SeasonLabel | null {
         if (airMs > nowMs && airMs - nowMs <= THREE_MONTHS_MS) {
             return "soon";
         }
+    }
+
+    // "Season coming soon" — confirmed returning series with an unscheduled future season (TMDB)
+    if (show.isReturningSoon) {
+
+        return "soon";
     }
 
     // "Season coming soon" — fallback: announced for a future year (year-granular)

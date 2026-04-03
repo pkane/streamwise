@@ -95,6 +95,11 @@ describe("getSeasonLabel", () => {
         expect(getSeasonLabel(show)).toBeNull();
     });
 
+    it('returns "soon" when isReturningSoon is true (unscheduled future season)', () => {
+        const show = makeShow({ isReturningSoon: true });
+        expect(getSeasonLabel(show)).toBe("soon");
+    });
+
     it("nextEpisodeAirDate takes priority over lastAirYear fallback", () => {
         // Has a precise date within window — returns "soon" regardless of lastAirYear
         const show = makeShow({ nextEpisodeAirDate: isoInDays(30), lastAirYear: CURRENT_YEAR + 1 });

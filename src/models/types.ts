@@ -56,6 +56,7 @@ export interface Show {
     lastAirYear?: number;  // mapped from API's `lastAirYear` (series only)
     tmdbId?: string;       // TMDB series id, used for next-episode enrichment
     nextEpisodeAirDate?: string; // ISO date string from TMDB's next_episode_to_air.air_date
+    isReturningSoon?: boolean;   // true when TMDB status is "Returning Series" with an unscheduled future season
     genres: Genre[];       // mapped from API's Genre[] objects to just id strings
     serviceId: string;     // derived from streamingOptions - first available service
     popularity?: number;   // 0..100, derived from API's `rating` (scaled)
