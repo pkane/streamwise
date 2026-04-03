@@ -4,7 +4,7 @@ import { mapApiShowToShow, type ApiShow } from "../../models/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const RAPIDAPI_HOST = "streaming-availability.p.rapidapi.com";
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY ?? "178f0cb199mshc0a4017a852f94ap1e28fdjsn49e504496aae";
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY!;
 
 /**
  * Search shows using the streaming-availability SDK.
