@@ -65,7 +65,7 @@ export default function OnboardingStep1() {
     }
 
     function handleAddOther() {
-        const trimmed = otherValue.trim();
+        const trimmed = otherValue.trim().charAt(0).toUpperCase() + otherValue.trim().slice(1);
         if (!trimmed) return;
         const id = `other_${Date.now()}`;
         const newService = { id, name: trimmed };
