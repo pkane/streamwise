@@ -2,12 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
-// Onboarding Screen 1 — Services You Have
-// Purpose: collect baseline inventory of services the user currently has.
-// TODO: persist to backend when auth / DB exists. For now we store in localStorage.
-
 import { DEFAULT_SERVICES as DEFAULT_SERVICE_OPTIONS } from "../../../data/constants";
+import { motion, fadeInUp, staggerContainer, staggerItem } from "../../../components/motion";
 
 type ServiceOption = { id: string; name: string };
 
@@ -108,19 +104,34 @@ export default function OnboardingStep1() {
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center py-12 min-h-48">
-                    <h1 className="text-2xl font-semibold dark:text-zinc-50">Which streaming services do you currently have?</h1>
-                    <p className="text-sm text-zinc-400 mt-2">Select everything you’re paying for—or regularly rotate through.</p>
+                    <motion.h1 className="text-2xl font-semibold dark:text-zinc-50" {...fadeInUp}>
+                        Which streaming services do you currently have?
+                    </motion.h1>
+                    <motion.p
+                        className="text-sm text-zinc-400 mt-2"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" as const }}
+                    >
+                        Select everything you’re paying for—or regularly rotate through.
+                    </motion.p>
                 </header>
 
                 <section>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <motion.div
+                        className="grid grid-cols-2 sm:grid-cols-3 gap-4"
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate={hydrated ? "animate" : "initial"}
+                    >
                         {services.map((svc) => {
                             const isSelected = selected.includes(svc.id);
                             return (
-                                <button
+                                <motion.button
                                     key={svc.id}
+                                    variants={staggerItem}
                                     onClick={() => toggle(svc.id)}
-                                    className={`flex items-center gap-3 rounded-lg border p-3 text-left text-zinc-800 hover:shadow-sm transition ${isSelected ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"} `}
+                                    className={`flex items-center gap-3 rounded-lg border p-3 text-left text-zinc-800 hover:shadow-sm transition-colors transition-shadow duration-150 ${isSelected ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"} `}
                                 >
                                     <div className={`w-10 h-10 rounded-md flex items-center justify-center text-white font-semibold ${isSelected ? "bg-zinc-900" : "bg-zinc-400"}`}>
                                         {svc.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
@@ -128,22 +139,23 @@ export default function OnboardingStep1() {
                                     <div>
                                         <div className="font-medium">{svc.name}</div>
                                     </div>
-                                </button>
+                                </motion.button>
                             );
                         })}
 
                         {/* Other card */}
-                        <button
+                        <motion.button
+                            variants={staggerItem}
                             onClick={() => setShowOtherModal(true)}
-                            className="flex items-center gap-3 rounded-lg border border-dashed p-3 text-left hover:shadow-sm transition bg-white "
+                            className="flex items-center gap-3 rounded-lg border border-dashed p-3 text-left hover:shadow-sm transition-colors transition-shadow duration-150 bg-white "
                         >
                             <div className="w-10 h-10 rounded-md flex items-center justify-center text-zinc-700 font-semibold bg-zinc-100">+</div>
                             <div>
                                 <div className="font-medium text-zinc-800">Other</div>
                                 <div className="text-sm text-zinc-500">Add manually</div>
                             </div>
-                        </button>
-                    </div>
+                        </motion.button>
+                    </motion.div>
                 </section>
 
                 <div className="h-24" />

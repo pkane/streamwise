@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Show } from "../../../models/types";
 import { GENRES } from "../../../data/constants";
 import { getSeasonLabel } from "../../../lib/seasonUtils";
+import { motion, fadeInUp, staggerContainer, staggerItem } from "../../../components/motion";
 
 // SCREEN 3 — Taste Calibration
 // 3A: Genres multi-select
@@ -140,22 +141,40 @@ export default function Onboarding3() {
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center text-balance py-12 min-h-48">
-                    <h1 className="text-2xl font-semibold dark:text-zinc-50">What kinds of shows do you actually look forward to watching?</h1>
-                    <p className="text-sm text-zinc-400">Select genres that best describe what you enjoy.</p>
+                    <motion.h1 className="text-2xl font-semibold dark:text-zinc-50" {...fadeInUp}>
+                        What kinds of shows do you actually look forward to watching?
+                    </motion.h1>
+                    <motion.p
+                        className="text-sm text-zinc-400"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" as const }}
+                    >
+                        Select genres that best describe what you enjoy.
+                    </motion.p>
                 </header>
 
                 <div className="bg-white p-8 rounded shadow">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-6 mb-6">
+                    <motion.div
+                        className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-6 mb-6"
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate="animate"
+                    >
                         {GENRES.map((g) => {
                             const chosen = selectedGenres.includes(g.id);
                             return (
-                                <button key={g.id} onClick={() => toggleGenre(g.id)} className={`p-3 rounded-lg text-left border ${chosen ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
+                                <motion.button
+                                    key={g.id}
+                                    variants={staggerItem}
+                                    onClick={() => toggleGenre(g.id)}
+                                    className={`p-3 rounded-lg text-left border ${chosen ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}
+                                >
                                     <div className="font-medium">{g.name}</div>
-                                    {/* <div className="text-xs text-zinc-500 mt-1">e.g. examples</div> */}
-                                </button>
+                                </motion.button>
                             );
                         })}
-                    </div>
+                    </motion.div>
 
                     <div className={`flex justify-between items-center ${revealSeen ? "hidden" : ""}`}>
                         <button className="text-sm text-zinc-500" onClick={() => router.back()}>Back</button>

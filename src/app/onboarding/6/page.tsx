@@ -3,31 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Show } from "../../../models/types";
-
-// Map genre IDs to display-friendly headlines
-const GENRE_HEADLINES: Record<string, string> = {
-    action: "The Adrenaline Architect",
-    adventure: "The Journey Junkie",
-    animation: "The Animation Aficionado",
-    comedy: "The Punchline Professional",
-    crime: "The Crime-Drama Kingpin",
-    documentary: "The Truth Seeker",
-    drama: "The Prestige Drama Devotee",
-    family: "The Family-Night MVP",
-    fantasy: "The Realm Roamer",
-    history: "The History Buff Supreme",
-    horror: "The Master of Mayhem",
-    music: "The Soundtrack Curator",
-    mystery: "The Plot-Twist Specialist",
-    news: "The Informed Insider",
-    reality: "The Reality-TV Ringmaster",
-    romance: "The Hopeless Romantic (In the Best Way)",
-    scifi: "The Future-World Navigator",
-    talk: "The Cultural Conversationalist",
-    thriller: "The Suspense Strategist",
-    war: "The Battlefield Historian",
-    western: "The Modern Gunslinger",
-};
+import { GENRE_HEADLINES } from "../../../data/constants";
+import { motion } from "../../../components/motion";
+import { fadeInUp, staggerContainer, staggerItem } from "../../../components/motion";
 
 /** Optimized service from API */
 interface OptimizedService {
@@ -207,33 +185,58 @@ export default function Onboarding6() {
 
     const budgetDiff = targetBudget !== null ? targetBudget - totalMonthlyCost : null;
 
+    function handleGoToDashboard() {
+        try {
+            localStorage.setItem("streamwise_onboarding_complete", "1");
+        } catch { /* ignore */ }
+        router.push("/dashboard");
+    }
+
     return (
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center text-balance py-12 min-h-48">
-                    <h1 className="text-2xl font-semibold dark:text-zinc-50">You are the {headline}</h1>
-                    <p className="text-sm text-zinc-400">Based on your tastes and budget, we recommend these services:</p>
+                    <motion.h1
+                        className="text-2xl font-semibold dark:text-zinc-50"
+                        {...fadeInUp}
+                    >
+                        You are the {headline}
+                    </motion.h1>
+                    <motion.p
+                        className="text-sm text-zinc-400"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" as const }}
+                    >
+                        Based on your tastes and budget, we recommend these services:
+                    </motion.p>
                 </header>
 
-                <div className="bg-white p-8 rounded shadow">
+                <motion.div
+                    className="bg-white p-8 rounded shadow"
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.15, ease: "easeOut" as const }}
+                >
                     <div className="mb-4">
                         <p className="text-sm text-zinc-500 mb-2">Recommended services:</p>
-                        <div className="inline-flex items-center gap-3 flex-wrap">
-                            {activeServices.length > 0 ? (
-                                activeServices.map((svc) => (
-                                    <span key={svc.serviceId} className="px-3 py-1 bg-zinc-100 rounded-full text-sm">
-                                        {svc.name}
-                                        <span className="text-zinc-400 ml-1">({svc.showCount} shows)</span>
-                                    </span>
-                                ))
-                            ) : (
-                                selectedServiceIds.map((id) => (
-                                    <span key={id} className="px-3 py-1 bg-zinc-100 rounded-full text-sm">
-                                        {id}
-                                    </span>
-                                ))
-                            )}
-                        </div>
+                        <motion.div
+                            className="inline-flex items-center gap-3 flex-wrap"
+                            variants={staggerContainer}
+                            initial="initial"
+                            animate="animate"
+                        >
+                            {(activeServices.length > 0 ? activeServices : selectedServiceIds.map((id) => ({ serviceId: id, name: id, showCount: 0 }))).map((svc) => (
+                                <motion.span
+                                    key={svc.serviceId}
+                                    variants={staggerItem}
+                                    className="px-3 py-1 bg-zinc-100 rounded-full text-sm"
+                                >
+                                    {svc.name}
+                                    {svc.showCount > 0 && <span className="text-zinc-400 ml-1">({svc.showCount} shows)</span>}
+                                </motion.span>
+                            ))}
+                        </motion.div>
                     </div>
 
                     <div className="mb-4">
@@ -261,9 +264,14 @@ export default function Onboarding6() {
                     {!loading && recommended.length > 0 && (
                         <div className="mt-6 pt-6 border-t border-zinc-200">
                             <p className="text-sm text-zinc-500 mb-3">A taste of what awaits you:</p>
-                            <div className="flex gap-3 justify-center">
+                            <motion.div
+                                className="flex gap-3 justify-center"
+                                variants={staggerContainer}
+                                initial="initial"
+                                animate="animate"
+                            >
                                 {recommended.slice(0, 3).map((show) => (
-                                    <div key={show.showId} className="w-20 group relative">
+                                    <motion.div key={show.showId} variants={staggerItem} className="w-20 group relative">
                                         <img
                                             src={show.imageSet?.verticalPoster?.w360 ?? "/vertical-poster.svg"}
                                             width={80}
@@ -274,22 +282,22 @@ export default function Onboarding6() {
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-sm flex items-end p-1">
                                             <span className="text-white text-xs font-medium line-clamp-2">{show.title}</span>
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 ))}
-                            </div>
+                            </motion.div>
                         </div>
                     )}
 
                     <div className="flex justify-end mt-6">
                         <button
-                            onClick={() => router.push("/dashboard")}
+                            onClick={handleGoToDashboard}
                             className="rounded-md bg-zinc-900 text-white px-4 py-2"
                             disabled={loading}
                         >
                             Go to my dashboard
                         </button>
                     </div>
-                </div>
+                </motion.div>
             </main>
         </div>
     );

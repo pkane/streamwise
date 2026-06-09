@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, fadeInUp, staggerContainer, staggerItem } from "../../../components/motion";
 
 // SCREEN 4 — Viewing Style (Release Preference)
 // Persists to `streamwise_user_releasePreference` as "weekly" | "binge" | "mixed"
@@ -28,27 +29,41 @@ export default function Onboarding4() {
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center text-balance py-12 min-h-48">
-                    <h1 className="text-2xl font-semibold dark:text-zinc-50">How do you usually like shows to release?</h1>
-                    <p className="text-sm text-zinc-400">This helps us decide when a service is worth activating.</p>
+                    <motion.h1 className="text-2xl font-semibold dark:text-zinc-50" {...fadeInUp}>
+                        How do you usually like shows to release?
+                    </motion.h1>
+                    <motion.p
+                        className="text-sm text-zinc-400"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" as const }}
+                    >
+                        This helps us decide when a service is worth activating.
+                    </motion.p>
                 </header>
 
                 <div className="bg-white p-8 rounded shadow">
-                    <div className="space-y-3 mb-6">
-                        <label className={`block p-4 rounded-lg border cursor-pointer ${pref === "weekly" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
+                    <motion.div
+                        className="space-y-3 mb-6"
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate="animate"
+                    >
+                        <motion.label variants={staggerItem} className={`block p-4 rounded-lg border cursor-pointer ${pref === "weekly" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
                             <input type="radio" name="release" checked={pref === "weekly"} onChange={() => setPref("weekly")} />
                             <span className="ml-3 font-medium">I’m fine watching week to week</span>
-                        </label>
+                        </motion.label>
 
-                        <label className={`block p-4 rounded-lg border cursor-pointer ${pref === "binge" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
+                        <motion.label variants={staggerItem} className={`block p-4 rounded-lg border cursor-pointer ${pref === "binge" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
                             <input type="radio" name="release" checked={pref === "binge"} onChange={() => setPref("binge")} />
                             <span className="ml-3 font-medium">I prefer waiting until a full season is out</span>
-                        </label>
+                        </motion.label>
 
-                        <label className={`block p-4 rounded-lg border cursor-pointer ${pref === "mixed" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
+                        <motion.label variants={staggerItem} className={`block p-4 rounded-lg border cursor-pointer ${pref === "mixed" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
                             <input type="radio" name="release" checked={pref === "mixed"} onChange={() => setPref("mixed")} />
                             <span className="ml-3 font-medium">It depends on the show</span>
-                        </label>
-                    </div>
+                        </motion.label>
+                    </motion.div>
 
                     <div className="flex justify-between items-center">
                         <button className="text-sm text-zinc-500" onClick={() => router.back()}>Back</button>

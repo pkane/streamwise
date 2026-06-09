@@ -41,8 +41,33 @@ export const BUDGET_OPTIONS: Array<{ id: string; label: string; value: number | 
     { id: "none", label: "I don’t have a budget — just maximize value", value: null },
 ];
 
+export const GENRE_HEADLINES: Record<string, string> = {
+    action: "The Adrenaline Architect",
+    adventure: "The Journey Junkie",
+    animation: "The Animation Aficionado",
+    comedy: "The Punchline Professional",
+    crime: "The Crime-Drama Kingpin",
+    documentary: "The Truth Seeker",
+    drama: "The Prestige Drama Devotee",
+    family: "The Family-Night MVP",
+    fantasy: "The Realm Roamer",
+    history: "The History Buff Supreme",
+    horror: "The Master of Mayhem",
+    music: "The Soundtrack Curator",
+    mystery: "The Plot-Twist Specialist",
+    news: "The Informed Insider",
+    reality: "The Reality-TV Ringmaster",
+    romance: "The Hopeless Romantic (In the Best Way)",
+    scifi: "The Future-World Navigator",
+    talk: "The Cultural Conversationalist",
+    thriller: "The Suspense Strategist",
+    war: "The Battlefield Historian",
+    western: "The Modern Gunslinger",
+};
+
 export default {
     DEFAULT_SERVICES,
     GENRES,
     BUDGET_OPTIONS,
+    GENRE_HEADLINES,
 };

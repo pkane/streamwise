@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion, fadeInUp, staggerContainer, staggerItem } from "../../../components/motion";
 
 // SCREEN 2 — Household Inclusion
 // Stores `streamwise_user_householdMode` as "solo" | "household" | "deferred"
@@ -28,28 +29,41 @@ export default function Onboarding2() {
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center text-balance py-12 min-h-48">
-                    <h1 className="text-2xl font-semibold dark:text-zinc-50">Want us to include other household members in your recommendations?</h1>
-                    <p className="text-sm text-zinc-400">This helps balance recommendations without adding extra subscriptions.</p>
+                    <motion.h1 className="text-2xl font-semibold dark:text-zinc-50" {...fadeInUp}>
+                        Want us to include other household members in your recommendations?
+                    </motion.h1>
+                    <motion.p
+                        className="text-sm text-zinc-400"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" as const }}
+                    >
+                        This helps balance recommendations without adding extra subscriptions.
+                    </motion.p>
                 </header>
 
-
                 <div className="bg-white p-10 rounded-lg shadow">
-                    <div className="space-y-3 mb-6">
-                        <label className={`block p-4 rounded-lg border cursor-pointer ${mode === "solo" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
+                    <motion.div
+                        className="space-y-3 mb-6"
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate="animate"
+                    >
+                        <motion.label variants={staggerItem} className={`block p-4 rounded-lg border cursor-pointer ${mode === "solo" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
                             <input type="radio" name="household" checked={mode === "solo"} onChange={() => setMode("solo")} />
                             <span className="ml-3 font-medium">Just me</span>
-                        </label>
+                        </motion.label>
 
-                        <label className={`block p-4 rounded-lg border cursor-pointer ${mode === "household" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
+                        <motion.label variants={staggerItem} className={`block p-4 rounded-lg border cursor-pointer ${mode === "household" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
                             <input type="radio" name="household" checked={mode === "household"} onChange={() => setMode("household")} />
                             <span className="ml-3 font-medium">Include a partner or family</span>
-                        </label>
+                        </motion.label>
 
-                        <label className={`block p-4 rounded-lg border cursor-pointer ${mode === "deferred" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
+                        <motion.label variants={staggerItem} className={`block p-4 rounded-lg border cursor-pointer ${mode === "deferred" ? "border-zinc-900 bg-zinc-100" : "border-zinc-200 bg-white"}`}>
                             <input type="radio" name="household" checked={mode === "deferred"} onChange={() => setMode("deferred")} />
                             <span className="ml-3 font-medium">I’ll set this up later</span>
-                        </label>
-                    </div>
+                        </motion.label>
+                    </motion.div>
 
                     <div className="flex justify-between items-center">
                         <button className="text-sm text-zinc-500" onClick={() => router.back()}>Back</button>

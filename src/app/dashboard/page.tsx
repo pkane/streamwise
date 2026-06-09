@@ -2,22 +2,21 @@
 
 import { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Show } from "../../models/types";
-import { DEFAULT_SERVICES } from "../../data/constants";
+import { DEFAULT_SERVICES, GENRE_HEADLINES } from "../../data/constants";
 import { getSeasonLabel } from "../../lib/seasonUtils";
+import { motion, AnimatePresence, fadeInUp, staggerContainer, staggerItem } from "../../components/motion";
 
-// Bump this string whenever the recommendation algorithm changes to invalidate stale caches.
 const CACHE_VERSION = "v3";
 const PAGE_SIZE = 8;
 const MAX_PAGES = 6;
 
-// Build service catalog from constants for consistent data
 const SERVICE_CATALOG = DEFAULT_SERVICES.reduce((acc, s) => {
     acc[s.id] = { serviceId: s.serviceId, name: s.name, monthlyPrice: s.monthlyPrice, status: s.status };
     return acc;
 }, {} as Record<string, { serviceId: string; name: string; monthlyPrice: number; status: string }>);
 
-/** Optimized service from API */
 interface OptimizedService {
     serviceId: string;
     name: string;
@@ -31,7 +30,6 @@ interface OptimizedService {
     recommendedStatus: "active" | "paused" | "always";
 }
 
-/** Full API response with optimized services */
 interface OptimizedResponse {
     shows: Show[];
     services: OptimizedService[];
@@ -39,10 +37,6 @@ interface OptimizedResponse {
     budgetRemaining: number | null;
 }
 
-/**
- * Fetch optimized recommendations from the API endpoint.
- * Returns both shows and optimized service recommendations.
- */
 async function fetchOptimizedRecommendations(
     services: string[],
     genres: string[],
@@ -62,23 +56,32 @@ async function fetchOptimizedRecommendations(
     });
 
     const res = await fetch(`/api/shows?${params.toString()}`);
-
-    if (!res.ok) {
-        console.debug("fetchOptimizedRecommendations - failed", res.status);
-        return null;
-    }
-
+    if (!res.ok) return null;
     const data = await res.json();
-
-    // Handle both old array format and new object format
-    if (Array.isArray(data)) {
-        return { shows: data, services: [], totalMonthlyCost: 0, budgetRemaining: null };
-    }
-
+    if (Array.isArray(data)) return { shows: data, services: [], totalMonthlyCost: 0, budgetRemaining: null };
     return data as OptimizedResponse;
 }
 
+function ThumbsUp({ filled }: { filled?: boolean }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3z" />
+            <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+        </svg>
+    );
+}
+
+function ThumbsDown({ filled }: { filled?: boolean }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3z" />
+            <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+        </svg>
+    );
+}
+
 export default function Dashboard(): JSX.Element {
+    const router = useRouter();
     const [recommended, setRecommended] = useState<Show[]>([]);
     const [optimizedServices, setOptimizedServices] = useState<OptimizedService[]>([]);
     const [services, setServices] = useState<string[]>([]);
@@ -89,8 +92,10 @@ export default function Dashboard(): JSX.Element {
     const [sortOrder, setSortOrder] = useState<"recommended" | "popularity" | "az">("recommended");
     const [dismissed, setDismissed] = useState<Set<string>>(new Set());
     const [page, setPage] = useState(1);
+    const [headline, setHeadline] = useState<string>("");
+    const [pendingDismiss, setPendingDismiss] = useState<Show | null>(null);
+    const [showRatings, setShowRatings] = useState<Record<string, "up" | "down">>({});
 
-    // Helper to load and fetch data
     const loadData = async (
         currentServices: string[],
         currentGenres: string[],
@@ -101,12 +106,8 @@ export default function Dashboard(): JSX.Element {
     ) => {
         setLoading(true);
         const result = await fetchOptimizedRecommendations(
-            currentServices,
-            currentGenres,
-            currentSignals,
-            currentReleasePref,
-            currentBudget,
-            currentStatuses
+            currentServices, currentGenres, currentSignals,
+            currentReleasePref, currentBudget, currentStatuses
         );
         if (result) {
             setRecommended(result.shows);
@@ -123,45 +124,42 @@ export default function Dashboard(): JSX.Element {
     useEffect(() => {
         async function init() {
             try {
-                // Load persisted services
                 const svcRaw = localStorage.getItem("streamwise_user_services");
                 const svc = svcRaw ? JSON.parse(svcRaw) as string[] : [];
                 const currentServices = svc.length ? svc : ["netflix", "hbo"];
                 setServices(currentServices);
 
-                // Load persisted genres
                 const genreRaw = localStorage.getItem("streamwise_user_genres");
                 const userGenres = genreRaw ? JSON.parse(genreRaw) as string[] : [];
                 const currentGenres = userGenres.length ? userGenres : ["crime"];
 
-                // Load service statuses
-                const statusKey = "streamwise_user_service_statuses";
-                const statusRaw = localStorage.getItem(statusKey);
+                // Derive headline from primary genre
+                const primaryGenre = currentGenres[0]?.toLowerCase() ?? "drama";
+                setHeadline(GENRE_HEADLINES[primaryGenre] ?? "");
+
+                const statusRaw = localStorage.getItem("streamwise_user_service_statuses");
                 const statusMap = statusRaw ? (JSON.parse(statusRaw) as Record<string, string>) : {};
 
-                // Load show signals
                 const signalsRaw = localStorage.getItem("streamwise_user_showSignals");
                 const signals = signalsRaw ? JSON.parse(signalsRaw) as Record<string, string> : {};
 
-                // Load release preference
                 const relPref = localStorage.getItem("streamwise_user_releasePreference") ?? "mixed";
 
-                // Load budget
                 const tb = localStorage.getItem("streamwise_user_targetBudget");
                 let currentBudget: number | null = null;
-                if (tb !== null && tb !== "null") {
-                    currentBudget = Number(tb);
-                }
+                if (tb !== null && tb !== "null") currentBudget = Number(tb);
                 setTargetBudget(currentBudget);
 
-                // Invalidate cache if algorithm version has changed
+                // Load persisted ratings
+                const ratingsRaw = localStorage.getItem("streamwise_show_ratings");
+                if (ratingsRaw) setShowRatings(JSON.parse(ratingsRaw) as Record<string, "up" | "down">);
+
                 if (localStorage.getItem("streamwise_cache_version") !== CACHE_VERSION) {
                     localStorage.removeItem("streamwise_recommendations");
                     localStorage.removeItem("streamwise_optimized_services");
                     localStorage.setItem("streamwise_cache_version", CACHE_VERSION);
                 }
 
-                // Check for cached data
                 const cachedRec = localStorage.getItem("streamwise_recommendations");
                 const cachedServices = localStorage.getItem("streamwise_optimized_services");
                 if (cachedRec && cachedServices) {
@@ -174,7 +172,6 @@ export default function Dashboard(): JSX.Element {
                     setTotalMonthlyCost(cachedCost);
                     setLoading(false);
                 } else {
-                    // Fetch fresh recommendations from API
                     await loadData(currentServices, currentGenres, signals, relPref, currentBudget, statusMap);
                 }
             } catch (e) {
@@ -186,37 +183,29 @@ export default function Dashboard(): JSX.Element {
                 setLoading(false);
             }
         }
-
         init();
     }, []);
 
-    // Get active services from optimized recommendations
     const activeOptimizedServices = optimizedServices.filter(
         (s) => s.recommendedStatus === "active" || s.recommendedStatus === "always"
     );
-
-    // Compute active service IDs for show display
     const activeServiceIds = new Set(activeOptimizedServices.map((s) => s.serviceId));
 
     const handleStatusToggle = (svc: OptimizedService) => {
-        // Cycle locally without re-fetching: active -> paused -> always -> active
         const order = ["active", "paused", "always"] as const;
         const cur = svc.recommendedStatus || "paused";
         const next = order[(order.indexOf(cur) + 1) % order.length];
-
         const updated = optimizedServices.map((s) =>
             s.serviceId === svc.serviceId ? { ...s, recommendedStatus: next } : s
         );
         setOptimizedServices(updated);
         setTotalMonthlyCost(
-            updated
-                .filter((s) => s.recommendedStatus === "active" || s.recommendedStatus === "always")
+            updated.filter((s) => s.recommendedStatus === "active" || s.recommendedStatus === "always")
                 .reduce((sum, s) => sum + s.monthlyPrice, 0)
         );
         setConfirmed(false);
     };
 
-    // Reset view state when fresh recommendations arrive
     useEffect(() => {
         setDismissed(new Set());
         setPage(1);
@@ -226,15 +215,20 @@ export default function Dashboard(): JSX.Element {
         setDismissed((prev) => new Set([...prev, showId]));
     };
 
-    // Sorted + filtered list (memoized to avoid re-sorting on every render)
+    const handleRate = (showId: string, rating: "up" | "down") => {
+        const updated = { ...showRatings, [showId]: rating };
+        setShowRatings(updated);
+        try {
+            localStorage.setItem("streamwise_show_ratings", JSON.stringify(updated));
+        } catch { /* ignore */ }
+        handleDismiss(showId);
+        setPendingDismiss(null);
+    };
+
     const sortedShows = useMemo(() => {
         const visible = recommended.filter((s) => !dismissed.has(s.showId));
-        if (sortOrder === "popularity") {
-            return [...visible].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-        }
-        if (sortOrder === "az") {
-            return [...visible].sort((a, b) => a.title.localeCompare(b.title));
-        }
+        if (sortOrder === "popularity") return [...visible].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+        if (sortOrder === "az") return [...visible].sort((a, b) => a.title.localeCompare(b.title));
         return visible;
     }, [recommended, dismissed, sortOrder]);
 
@@ -247,16 +241,12 @@ export default function Dashboard(): JSX.Element {
         const activeIds: string[] = [];
         for (const svc of optimizedServices) {
             newStatuses[svc.serviceId] = svc.recommendedStatus;
-            if (svc.recommendedStatus === "active" || svc.recommendedStatus === "always") {
-                activeIds.push(svc.serviceId);
-            }
+            if (svc.recommendedStatus === "active" || svc.recommendedStatus === "always") activeIds.push(svc.serviceId);
         }
-
         localStorage.setItem("streamwise_user_service_statuses", JSON.stringify(newStatuses));
         localStorage.setItem("streamwise_user_services", JSON.stringify(activeIds));
         localStorage.setItem("streamwise_optimized_services", JSON.stringify(optimizedServices));
         localStorage.setItem("streamwise_recommendations", JSON.stringify(recommended));
-
         setServices(activeIds);
         setConfirmed(true);
     };
@@ -264,73 +254,35 @@ export default function Dashboard(): JSX.Element {
     return (
         <div className="min-h-screen p-6 bg-zinc-50 text-zinc-900 font-sans dark:bg-black">
             <main className="mx-auto max-w-4xl pb-6">
+                {/* Header */}
                 <header className="mb-8 py-12">
-                    <h1 className="text-3xl font-semibold dark:text-zinc-50">Your Dashboard</h1>
-                    <h2 className="mt-8">
-                        <span className="text-2xl dark:text-white font-bold">${totalMonthlyCost.toFixed(2)}/mo</span>
-                        {targetBudget !== null && (
-                            <span className={totalMonthlyCost <= targetBudget ? "text-green-600" : "text-amber-600"}>
-                                {" "}({totalMonthlyCost <= targetBudget ? "under" : "over"} ${targetBudget} target)
-                            </span>
-                        )}
-                    </h2>
-                    <p className=" text-zinc-600 dark:text-zinc-400">
-                        {activeOptimizedServices.length > 0
-                            ? `Recommended: ${activeOptimizedServices.map((s) => s.name).join(", ")}`
-                            : `Selected services: ${services.join(", ")}`}
-                        {" "}
-                    </p>
+                    <motion.h1
+                        className="text-3xl font-semibold dark:text-zinc-50"
+                        {...fadeInUp}
+                    >
+                        Welcome back{headline ? `, ${headline}` : ""}.
+                    </motion.h1>
+                    <motion.p
+                        className="mt-2 text-zinc-500 dark:text-zinc-400"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" as const }}
+                    >
+                        Here's what's waiting for you.
+                    </motion.p>
                 </header>
 
-                <section className="mb-8">
+                {/* What to Watch — shown first */}
+                <section className="mb-12">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-medium dark:text-zinc-50">Recommended Services</h2>
-                        <button
-                            onClick={handleConfirm}
-                            disabled={loading}
-                            className="px-4 py-1.5 text-sm font-medium rounded-md bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                        <motion.h2
+                            className="text-xl font-medium dark:text-zinc-50"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.35, delay: 0.15, ease: "easeOut" as const }}
                         >
-                            {confirmed ? "Confirmed!" : "Confirm"}
-                        </button>
-                    </div>
-                    <p className="text-sm text-zinc-500 mb-4 dark:text-zinc-400">
-                        Based on your taste and budget, these services offer the best value. Toggle to adjust, then confirm.
-                    </p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        {optimizedServices.map((svc) => {
-                            const isActive = svc.recommendedStatus === "active" || svc.recommendedStatus === "always";
-                            return (
-                                <div
-                                    key={svc.serviceId}
-                                    className={`rounded-lg border p-4 shadow-sm transition-opacity ${isActive
-                                        ? "border-zinc-200 bg-white"
-                                        : "border-dashed border-zinc-300 bg-zinc-50 opacity-50 dark:bg-zinc-900"
-                                        }`}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h3 className={`text-lg font-semibold ${!isActive ? "dark:text-zinc-50" : ""}`}>{svc.name}</h3>
-                                            <p className="text-sm text-zinc-500">${svc.monthlyPrice.toFixed(2)} / month</p>
-                                            <p className="text-xs text-zinc-400">{svc.showCount} shows for you</p>
-                                        </div>
-                                        <div className="text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                                            <button
-                                                onClick={() => handleStatusToggle(svc)}
-                                                className="underline"
-                                            >
-                                                {svc.recommendedStatus}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </section>
-
-                <section>
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-medium dark:text-zinc-50">What to Watch</h2>                
+                            What to Watch
+                        </motion.h2>
                         {!loading && recommended.length > 0 && (
                             <div className="flex items-center gap-1 text-sm">
                                 {(["recommended", "popularity", "az"] as const).map((opt) => (
@@ -349,9 +301,14 @@ export default function Dashboard(): JSX.Element {
                             </div>
                         )}
                     </div>
-                    <p className="w-2/3 text-sm text-zinc-500 mb-4 dark:text-zinc-400">
-                        Here are your recommended shows. You can clear any you don't want. The rest will get saved for later.
-                    </p>
+                    <motion.p
+                        className="w-2/3 text-sm text-zinc-500 mb-4 dark:text-zinc-400"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" as const }}
+                    >
+                        Your recommended shows. Clear any you've watched or don't want.
+                    </motion.p>
 
                     {loading ? (
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -370,21 +327,27 @@ export default function Dashboard(): JSX.Element {
                             ))}
                         </div>
                     ) : sortedShows.length === 0 ? (
-                        <p className="text-zinc-500">No recommendations found. Try adjusting your genre preferences.</p>
+                        <p className="text-zinc-500">No recommendations found. Try adjusting your preferences.</p>
                     ) : (
                         <>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <motion.div
+                                className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+                                variants={staggerContainer}
+                                initial="initial"
+                                animate="animate"
+                            >
                                 {pageShows.map((show) => {
                                     const isFromActiveService = activeServiceIds.has(show.serviceId);
                                     const serviceName = SERVICE_CATALOG[show.serviceId]?.name ?? show.serviceId;
                                     return (
-                                        <div
+                                        <motion.div
                                             key={show.showId}
+                                            variants={staggerItem}
                                             className={`relative rounded-lg border bg-white p-4 shadow-sm ${isFromActiveService ? "border-zinc-200" : "border-dashed border-zinc-300 opacity-80"}`}
                                         >
                                             <button
-                                                onClick={() => handleDismiss(show.showId)}
-                                                aria-label={`Dismiss ${show.title}`}
+                                                onClick={() => setPendingDismiss(show)}
+                                                aria-label={`Remove ${show.title} from watchlist`}
                                                 className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                                             >
                                                 ✕
@@ -414,17 +377,16 @@ export default function Dashboard(): JSX.Element {
                                                     )}
                                                     <div className="mt-3 text-sm flex items-center justify-between">
                                                         <span className={isFromActiveService ? "text-zinc-700 font-medium" : "text-zinc-400"}>
-                                                            {serviceName}
-                                                            {!isFromActiveService && " (not active)"}
+                                                            {serviceName}{!isFromActiveService && " (not active)"}
                                                         </span>
                                                         {show.popularity && <span className="text-zinc-400">pop {show.popularity}</span>}
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </motion.div>
                                     );
                                 })}
-                            </div>
+                            </motion.div>
 
                             {totalPages > 1 && (
                                 <div className="flex items-center justify-center gap-3 mt-6">
@@ -435,9 +397,7 @@ export default function Dashboard(): JSX.Element {
                                     >
                                         ← Prev
                                     </button>
-                                    <span className="text-sm text-zinc-500">
-                                        {clampedPage} / {totalPages}
-                                    </span>
+                                    <span className="text-sm text-zinc-500">{clampedPage} / {totalPages}</span>
                                     <button
                                         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                                         disabled={clampedPage === totalPages}
@@ -450,7 +410,142 @@ export default function Dashboard(): JSX.Element {
                         </>
                     )}
                 </section>
+
+                {/* Budget + Recommended Services */}
+                <section className="mb-8">
+                    <motion.div
+                        className="mb-6"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" as const }}
+                    >
+                        <h2 className="text-2xl font-bold dark:text-white">
+                            ${totalMonthlyCost.toFixed(2)}/mo
+                        </h2>
+                        {targetBudget !== null && (
+                            <span className={totalMonthlyCost <= targetBudget ? "text-green-600 text-sm" : "text-amber-600 text-sm"}>
+                                {totalMonthlyCost <= targetBudget ? "under" : "over"} ${targetBudget} target
+                            </span>
+                        )}
+                    </motion.div>
+
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-medium dark:text-zinc-50">Recommended Services</h2>
+                        <button
+                            onClick={handleConfirm}
+                            disabled={loading}
+                            className="px-4 py-1.5 text-sm font-medium rounded-md bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                        >
+                            {confirmed ? "Confirmed!" : "Confirm"}
+                        </button>
+                    </div>
+                    <p className="text-sm text-zinc-500 mb-4 dark:text-zinc-400">
+                        Based on your taste and budget. Toggle to adjust, then confirm.
+                    </p>
+                    <motion.div
+                        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate="animate"
+                    >
+                        {optimizedServices.map((svc) => {
+                            const isActive = svc.recommendedStatus === "active" || svc.recommendedStatus === "always";
+                            return (
+                                <motion.div
+                                    key={svc.serviceId}
+                                    variants={staggerItem}
+                                    className={`rounded-lg border p-4 shadow-sm transition-opacity ${isActive
+                                        ? "border-zinc-200 bg-white"
+                                        : "border-dashed border-zinc-300 bg-zinc-50 opacity-50 dark:bg-zinc-900"
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className={`text-lg font-semibold ${!isActive ? "dark:text-zinc-50" : ""}`}>{svc.name}</h3>
+                                            <p className="text-sm text-zinc-500">${svc.monthlyPrice.toFixed(2)} / month</p>
+                                            <p className="text-xs text-zinc-400">{svc.showCount} shows for you</p>
+                                        </div>
+                                        <div className="text-sm font-medium text-zinc-700 dark:text-zinc-400">
+                                            <button onClick={() => handleStatusToggle(svc)} className="underline">
+                                                {svc.recommendedStatus}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </motion.div>
+                </section>
+
+                {/* Get new recommendations */}
+                <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                    <button
+                        onClick={() => router.push("/onboarding/1")}
+                        className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 underline underline-offset-2 transition-colors"
+                    >
+                        Get new recommendations
+                    </button>
+                </div>
             </main>
+
+            {/* Dismiss modal */}
+            <AnimatePresence>
+                {pendingDismiss && (
+                    <motion.div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        onClick={() => setPendingDismiss(null)}
+                    >
+                        <motion.div
+                            className="w-full max-w-sm bg-white rounded-lg p-6 shadow-xl dark:bg-zinc-900"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.15 }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <h3 className="text-lg font-semibold mb-1 dark:text-zinc-50">Remove from watchlist?</h3>
+                            <p className="text-sm text-zinc-500 mb-5 dark:text-zinc-400 line-clamp-1">{pendingDismiss.title}</p>
+                            <div className="flex gap-3 mb-6">
+                                <button
+                                    onClick={() => { handleDismiss(pendingDismiss.showId); setPendingDismiss(null); }}
+                                    className="flex-1 rounded-md bg-zinc-900 text-white py-2 font-medium hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+                                >
+                                    Yes
+                                </button>
+                                <button
+                                    onClick={() => setPendingDismiss(null)}
+                                    className="flex-1 rounded-md border border-zinc-200 py-2 font-medium hover:bg-zinc-50 dark:border-zinc-700"
+                                >
+                                    No
+                                </button>
+                            </div>
+                            <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
+                                <p className="text-xs text-zinc-400 mb-3">How was it?</p>
+                                <div className="flex gap-4 justify-center">
+                                    <button
+                                        onClick={() => handleRate(pendingDismiss.showId, "up")}
+                                        className={`p-2.5 rounded-full transition-colors ${showRatings[pendingDismiss.showId] === "up" ? "bg-green-100 text-green-600" : "hover:bg-zinc-100 text-zinc-500 dark:hover:bg-zinc-800"}`}
+                                        aria-label="Thumbs up"
+                                    >
+                                        <ThumbsUp filled={showRatings[pendingDismiss.showId] === "up"} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleRate(pendingDismiss.showId, "down")}
+                                        className={`p-2.5 rounded-full transition-colors ${showRatings[pendingDismiss.showId] === "down" ? "bg-red-100 text-red-500" : "hover:bg-zinc-100 text-zinc-500 dark:hover:bg-zinc-800"}`}
+                                        aria-label="Thumbs down"
+                                    >
+                                        <ThumbsDown filled={showRatings[pendingDismiss.showId] === "down"} />
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
