@@ -391,9 +391,11 @@ export default function Dashboard(): JSX.Element {
             setRecommended(result.shows);
             setOptimizedServices(result.services);
             setTotalMonthlyCost(result.totalMonthlyCost);
+            setDismissed(new Set());
             try {
                 localStorage.setItem("streamwise_recommendations", JSON.stringify(result.shows));
                 localStorage.setItem("streamwise_optimized_services", JSON.stringify(result.services));
+                localStorage.removeItem("streamwise_dismissed_shows");
             } catch { /* ignore */ }
         }
         setLoading(false);
@@ -431,6 +433,10 @@ export default function Dashboard(): JSX.Element {
                 // Load persisted ratings
                 const ratingsRaw = localStorage.getItem("streamwise_show_ratings");
                 if (ratingsRaw) setShowRatings(JSON.parse(ratingsRaw) as Record<string, "up" | "down">);
+
+                // Load persisted dismissals
+                const dismissedRaw = localStorage.getItem("streamwise_dismissed_shows");
+                if (dismissedRaw) setDismissed(new Set(JSON.parse(dismissedRaw) as string[]));
 
                 if (localStorage.getItem("streamwise_cache_version") !== CACHE_VERSION) {
                     localStorage.removeItem("streamwise_recommendations");
@@ -485,12 +491,17 @@ export default function Dashboard(): JSX.Element {
     };
 
     useEffect(() => {
-        setDismissed(new Set());
         setPage(1);
     }, [recommended]);
 
     const handleDismiss = (showId: string) => {
-        setDismissed((prev) => new Set([...prev, showId]));
+        setDismissed((prev) => {
+            const next = new Set([...prev, showId]);
+            try {
+                localStorage.setItem("streamwise_dismissed_shows", JSON.stringify([...next]));
+            } catch { /* ignore */ }
+            return next;
+        });
     };
 
     const handleRate = (showId: string, rating: "up" | "down") => {
@@ -499,8 +510,6 @@ export default function Dashboard(): JSX.Element {
         try {
             localStorage.setItem("streamwise_show_ratings", JSON.stringify(updated));
         } catch { /* ignore */ }
-        handleDismiss(showId);
-        setPendingDismiss(null);
     };
 
     const sortedShows = useMemo(() => {
