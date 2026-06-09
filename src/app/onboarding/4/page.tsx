@@ -29,7 +29,7 @@ export default function Onboarding4() {
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center text-balance py-12 min-h-48">
-                    <motion.h1 className="text-2xl font-semibold dark:text-zinc-50" {...fadeInUp}>
+                    <motion.h1 className="text-2xl font-semibold font-display dark:text-zinc-50" {...fadeInUp}>
                         How do you usually like shows to release?
                     </motion.h1>
                     <motion.p

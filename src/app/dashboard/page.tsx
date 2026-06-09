@@ -1,7 +1,6 @@
 "use client";
 
-import { JSX } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type JSX, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import type { Show } from "../../models/types";
 import { DEFAULT_SERVICES, GENRE_HEADLINES } from "../../data/constants";
@@ -11,6 +10,33 @@ import { motion, AnimatePresence, fadeInUp, staggerContainer, staggerItem } from
 const CACHE_VERSION = "v3";
 const PAGE_SIZE = 8;
 const MAX_PAGES = 6;
+
+const FIRST_VISIT_GRACE_MS = 2_000;
+
+// React Strict Mode remounts immediately after clearing localStorage; keep a
+// short-lived session marker so the second mount still sees first-visit layout.
+function consumeFirstVisitFlag(): boolean {
+    if (typeof window === "undefined") return false;
+
+    try {
+        const pending = localStorage.getItem("streamwise_dashboard_first_view") === "1";
+        if (pending) {
+            localStorage.removeItem("streamwise_dashboard_first_view");
+            sessionStorage.setItem(
+                "streamwise_dashboard_welcome_until",
+                String(Date.now() + FIRST_VISIT_GRACE_MS)
+            );
+            return true;
+        }
+
+        const welcomeUntil = Number(sessionStorage.getItem("streamwise_dashboard_welcome_until") ?? "0");
+        if (Date.now() < welcomeUntil) return true;
+
+        sessionStorage.removeItem("streamwise_dashboard_welcome_until");
+    } catch { /* ignore */ }
+
+    return false;
+}
 
 const SERVICE_CATALOG = DEFAULT_SERVICES.reduce((acc, s) => {
     acc[s.id] = { serviceId: s.serviceId, name: s.name, monthlyPrice: s.monthlyPrice, status: s.status };
@@ -80,6 +106,257 @@ function ThumbsDown({ filled }: { filled?: boolean }) {
     );
 }
 
+function WhatToWatchSection({
+    loading,
+    recommended,
+    sortOrder,
+    setSortOrder,
+    setPage,
+    sortedShows,
+    pageShows,
+    totalPages,
+    clampedPage,
+    activeServiceIds,
+    setPendingDismiss,
+}: {
+    loading: boolean;
+    recommended: Show[];
+    sortOrder: "recommended" | "popularity" | "az";
+    setSortOrder: (order: "recommended" | "popularity" | "az") => void;
+    setPage: Dispatch<SetStateAction<number>>;
+    sortedShows: Show[];
+    pageShows: Show[];
+    totalPages: number;
+    clampedPage: number;
+    activeServiceIds: Set<string>;
+    setPendingDismiss: (show: Show) => void;
+}) {
+    return (
+        <section className="mb-12">
+            <div className="flex items-center justify-between">
+                <motion.h2
+                    className="text-xl font-medium font-display dark:text-zinc-50"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, delay: 0.15, ease: "easeOut" as const }}
+                >
+                    What to Watch
+                </motion.h2>
+                {!loading && recommended.length > 0 && (
+                    <div className="flex items-center gap-1 text-sm">
+                        {(["recommended", "popularity", "az"] as const).map((opt) => (
+                            <button
+                                key={opt}
+                                onClick={() => { setSortOrder(opt); setPage(1); }}
+                                className={`px-2.5 py-1 rounded-md transition-colors ${
+                                    sortOrder === opt
+                                        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                                        : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                                }`}
+                            >
+                                {opt === "recommended" ? "Recommended" : opt === "popularity" ? "Popularity" : "A–Z"}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+            <motion.p
+                className="w-2/3 text-sm text-zinc-500 mb-4 dark:text-zinc-400"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" as const }}
+            >
+                Your recommended shows. Clear any you&apos;ve watched or don&apos;t want.
+            </motion.p>
+
+            {loading ? (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={`loading-${i}`} className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm animate-pulse">
+                            <div className="flex items-start gap-4">
+                                <div className="w-28 h-42 bg-zinc-200 rounded shrink-0" />
+                                <div className="flex-1">
+                                    <div className="h-5 bg-zinc-200 w-3/4 mb-2 rounded" />
+                                    <div className="h-4 bg-zinc-200 w-1/2 mb-2 rounded" />
+                                    <div className="h-3 bg-zinc-200 w-full mb-1 rounded" />
+                                    <div className="h-3 bg-zinc-200 w-2/3 rounded" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : sortedShows.length === 0 ? (
+                <p className="text-zinc-500">No recommendations found. Try adjusting your preferences.</p>
+            ) : (
+                <>
+                    <motion.div
+                        className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate="animate"
+                    >
+                        {pageShows.map((show) => {
+                            const isFromActiveService = activeServiceIds.has(show.serviceId);
+                            const serviceName = SERVICE_CATALOG[show.serviceId]?.name ?? show.serviceId;
+                            return (
+                                <motion.div
+                                    key={show.showId}
+                                    variants={staggerItem}
+                                    className={`relative rounded-lg border bg-white p-4 shadow-sm ${isFromActiveService ? "border-zinc-200" : "border-dashed border-zinc-300 opacity-80"}`}
+                                >
+                                    <button
+                                        onClick={() => setPendingDismiss(show)}
+                                        aria-label={`Remove ${show.title} from watchlist`}
+                                        className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                                    >
+                                        ✕
+                                    </button>
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-28 shrink-0">
+                                            <img
+                                                src={show.imageSet?.verticalPoster?.w360 ?? "/vertical-poster.svg"}
+                                                width={112}
+                                                height={168}
+                                                alt={`${show.title} poster`}
+                                                className="rounded-sm object-cover w-full"
+                                            />
+                                        </div>
+                                        <div className="flex-1 pr-4">
+                                            <h3 className="text-lg font-semibold font-display italic">{show.title}</h3>
+                                            {(() => {
+                                                const label = getSeasonLabel(show);
+                                                if (label === "new") return <span className="inline-block mt-0.5 mb-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">New season</span>;
+                                                if (label === "soon") return <span className="inline-block mt-0.5 mb-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Season coming soon</span>;
+                                                return null;
+                                            })()}
+                                            <p className="text-sm text-zinc-500">{show.year} • {show.genres.join(", ")}</p>
+                                            <p className="mt-2 text-sm text-zinc-600 line-clamp-3">{show.overview ?? "No overview available."}</p>
+                                            {show.actors && show.actors.length > 0 && (
+                                                <p className="mt-2 text-sm text-zinc-500">Starring: {show.actors.slice(0, 2).join(", ")}</p>
+                                            )}
+                                            <div className="mt-3 text-sm flex items-center justify-between">
+                                                <span className={isFromActiveService ? "text-zinc-700 font-medium" : "text-zinc-400"}>
+                                                    {serviceName}{!isFromActiveService && " (not active)"}
+                                                </span>
+                                                {show.popularity && <span className="text-zinc-400">pop {show.popularity}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </motion.div>
+
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-center gap-3 mt-6">
+                            <button
+                                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                disabled={clampedPage === 1}
+                                className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:hover:bg-zinc-800"
+                            >
+                                ← Prev
+                            </button>
+                            <span className="text-sm text-zinc-500">{clampedPage} / {totalPages}</span>
+                            <button
+                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={clampedPage === totalPages}
+                                className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:hover:bg-zinc-800"
+                            >
+                                Next →
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
+        </section>
+    );
+}
+
+function BudgetAndServicesSection({
+    loading,
+    confirmed,
+    totalMonthlyCost,
+    targetBudget,
+    optimizedServices,
+    handleConfirm,
+    handleStatusToggle,
+}: {
+    loading: boolean;
+    confirmed: boolean;
+    totalMonthlyCost: number;
+    targetBudget: number | null;
+    optimizedServices: OptimizedService[];
+    handleConfirm: () => void;
+    handleStatusToggle: (svc: OptimizedService) => void;
+}) {
+    return (
+        <section className="mb-8">
+            <motion.div
+                className="mb-6"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" as const }}
+            >
+                <h2 className="text-2xl font-bold dark:text-white">
+                    ${totalMonthlyCost.toFixed(2)}/mo
+                </h2>
+                {targetBudget !== null && (
+                    <span className={totalMonthlyCost <= targetBudget ? "text-green-600 text-sm" : "text-amber-600 text-sm"}>
+                        {totalMonthlyCost <= targetBudget ? "under" : "over"} ${targetBudget} target
+                    </span>
+                )}
+            </motion.div>
+
+            <div className="flex items-center justify-between">
+                <h2 className="text-xl font-medium font-display dark:text-zinc-50">Recommended Services</h2>
+                <button
+                    onClick={handleConfirm}
+                    disabled={loading}
+                    className="px-4 py-1.5 text-sm font-medium rounded-md bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                >
+                    {confirmed ? "Confirmed!" : "Confirm"}
+                </button>
+            </div>
+            <p className="text-sm text-zinc-500 mb-4 dark:text-zinc-400">
+                Based on your taste and budget. Toggle to adjust, then confirm.
+            </p>
+            <motion.div
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
+                {optimizedServices.map((svc) => {
+                    const isActive = svc.recommendedStatus === "active" || svc.recommendedStatus === "always";
+                    return (
+                        <motion.div
+                            key={svc.serviceId}
+                            variants={staggerItem}
+                            className={`rounded-lg border p-4 shadow-sm transition-opacity ${isActive
+                                ? "border-zinc-200 bg-white"
+                                : "border-dashed border-zinc-300 bg-zinc-50 opacity-50 dark:bg-zinc-900"
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className={`text-lg font-semibold ${!isActive ? "dark:text-zinc-50" : ""}`}>{svc.name}</h3>
+                                    <p className="text-sm text-zinc-500">${svc.monthlyPrice.toFixed(2)} / month</p>
+                                    <p className="text-xs text-zinc-400">{svc.showCount} shows for you</p>
+                                </div>
+                                <div className="text-sm font-medium text-zinc-700 dark:text-zinc-400">
+                                    <button onClick={() => handleStatusToggle(svc)} className="underline">
+                                        {svc.recommendedStatus}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    );
+                })}
+            </motion.div>
+        </section>
+    );
+}
+
 export default function Dashboard(): JSX.Element {
     const router = useRouter();
     const [recommended, setRecommended] = useState<Show[]>([]);
@@ -93,6 +370,7 @@ export default function Dashboard(): JSX.Element {
     const [dismissed, setDismissed] = useState<Set<string>>(new Set());
     const [page, setPage] = useState(1);
     const [headline, setHeadline] = useState<string>("");
+    const [isFirstVisit] = useState(consumeFirstVisitFlag);
     const [pendingDismiss, setPendingDismiss] = useState<Show | null>(null);
     const [showRatings, setShowRatings] = useState<Record<string, "up" | "down">>({});
 
@@ -257,10 +535,22 @@ export default function Dashboard(): JSX.Element {
                 {/* Header */}
                 <header className="mb-8 py-12">
                     <motion.h1
-                        className="text-3xl font-semibold dark:text-zinc-50"
+                        className="text-3xl font-semibold font-display dark:text-zinc-50"
                         {...fadeInUp}
                     >
-                        Welcome back{headline ? `, ${headline}` : ""}.
+                        {isFirstVisit ? (
+                            <>
+                                You&apos;re all set{headline ? (
+                                    <>, <span className="italic">{headline}</span></>
+                                ) : ""}.
+                            </>
+                        ) : (
+                            <>
+                                Welcome back{headline ? (
+                                    <>, <span className="italic">{headline}</span></>
+                                ) : ""}.
+                            </>
+                        )}
                     </motion.h1>
                     <motion.p
                         className="mt-2 text-zinc-500 dark:text-zinc-400"
@@ -268,214 +558,63 @@ export default function Dashboard(): JSX.Element {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" as const }}
                     >
-                        Here's what's waiting for you.
+                        {isFirstVisit
+                            ? "Review your services and budget, then see what to watch."
+                            : "Here's what's waiting for you."}
                     </motion.p>
                 </header>
 
-                {/* What to Watch — shown first */}
-                <section className="mb-12">
-                    <div className="flex items-center justify-between mb-4">
-                        <motion.h2
-                            className="text-xl font-medium dark:text-zinc-50"
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.35, delay: 0.15, ease: "easeOut" as const }}
-                        >
-                            What to Watch
-                        </motion.h2>
-                        {!loading && recommended.length > 0 && (
-                            <div className="flex items-center gap-1 text-sm">
-                                {(["recommended", "popularity", "az"] as const).map((opt) => (
-                                    <button
-                                        key={opt}
-                                        onClick={() => { setSortOrder(opt); setPage(1); }}
-                                        className={`px-2.5 py-1 rounded-md transition-colors ${
-                                            sortOrder === opt
-                                                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                                                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                                        }`}
-                                    >
-                                        {opt === "recommended" ? "Recommended" : opt === "popularity" ? "Popularity" : "A–Z"}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    <motion.p
-                        className="w-2/3 text-sm text-zinc-500 mb-4 dark:text-zinc-400"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" as const }}
-                    >
-                        Your recommended shows. Clear any you've watched or don't want.
-                    </motion.p>
-
-                    {loading ? (
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            {Array.from({ length: 6 }).map((_, i) => (
-                                <div key={`loading-${i}`} className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm animate-pulse">
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-28 h-42 bg-zinc-200 rounded shrink-0" />
-                                        <div className="flex-1">
-                                            <div className="h-5 bg-zinc-200 w-3/4 mb-2 rounded" />
-                                            <div className="h-4 bg-zinc-200 w-1/2 mb-2 rounded" />
-                                            <div className="h-3 bg-zinc-200 w-full mb-1 rounded" />
-                                            <div className="h-3 bg-zinc-200 w-2/3 rounded" />
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : sortedShows.length === 0 ? (
-                        <p className="text-zinc-500">No recommendations found. Try adjusting your preferences.</p>
-                    ) : (
-                        <>
-                            <motion.div
-                                className="grid grid-cols-1 gap-4 sm:grid-cols-2"
-                                variants={staggerContainer}
-                                initial="initial"
-                                animate="animate"
-                            >
-                                {pageShows.map((show) => {
-                                    const isFromActiveService = activeServiceIds.has(show.serviceId);
-                                    const serviceName = SERVICE_CATALOG[show.serviceId]?.name ?? show.serviceId;
-                                    return (
-                                        <motion.div
-                                            key={show.showId}
-                                            variants={staggerItem}
-                                            className={`relative rounded-lg border bg-white p-4 shadow-sm ${isFromActiveService ? "border-zinc-200" : "border-dashed border-zinc-300 opacity-80"}`}
-                                        >
-                                            <button
-                                                onClick={() => setPendingDismiss(show)}
-                                                aria-label={`Remove ${show.title} from watchlist`}
-                                                className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                                            >
-                                                ✕
-                                            </button>
-                                            <div className="flex items-start gap-4">
-                                                <div className="w-28 shrink-0">
-                                                    <img
-                                                        src={show.imageSet?.verticalPoster?.w360 ?? "/vertical-poster.svg"}
-                                                        width={112}
-                                                        height={168}
-                                                        alt={`${show.title} poster`}
-                                                        className="rounded-sm object-cover w-full"
-                                                    />
-                                                </div>
-                                                <div className="flex-1 pr-4">
-                                                    <h3 className="text-lg font-semibold">{show.title}</h3>
-                                                    {(() => {
-                                                        const label = getSeasonLabel(show);
-                                                        if (label === "new") return <span className="inline-block mt-0.5 mb-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">New season</span>;
-                                                        if (label === "soon") return <span className="inline-block mt-0.5 mb-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Season coming soon</span>;
-                                                        return null;
-                                                    })()}
-                                                    <p className="text-sm text-zinc-500">{show.year} • {show.genres.join(", ")}</p>
-                                                    <p className="mt-2 text-sm text-zinc-600 line-clamp-3">{show.overview ?? "No overview available."}</p>
-                                                    {show.actors && show.actors.length > 0 && (
-                                                        <p className="mt-2 text-sm text-zinc-500">Starring: {show.actors.slice(0, 2).join(", ")}</p>
-                                                    )}
-                                                    <div className="mt-3 text-sm flex items-center justify-between">
-                                                        <span className={isFromActiveService ? "text-zinc-700 font-medium" : "text-zinc-400"}>
-                                                            {serviceName}{!isFromActiveService && " (not active)"}
-                                                        </span>
-                                                        {show.popularity && <span className="text-zinc-400">pop {show.popularity}</span>}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </motion.div>
-
-                            {totalPages > 1 && (
-                                <div className="flex items-center justify-center gap-3 mt-6">
-                                    <button
-                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                        disabled={clampedPage === 1}
-                                        className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:hover:bg-zinc-800"
-                                    >
-                                        ← Prev
-                                    </button>
-                                    <span className="text-sm text-zinc-500">{clampedPage} / {totalPages}</span>
-                                    <button
-                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                        disabled={clampedPage === totalPages}
-                                        className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-700 dark:hover:bg-zinc-800"
-                                    >
-                                        Next →
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </section>
-
-                {/* Budget + Recommended Services */}
-                <section className="mb-8">
-                    <motion.div
-                        className="mb-6"
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" as const }}
-                    >
-                        <h2 className="text-2xl font-bold dark:text-white">
-                            ${totalMonthlyCost.toFixed(2)}/mo
-                        </h2>
-                        {targetBudget !== null && (
-                            <span className={totalMonthlyCost <= targetBudget ? "text-green-600 text-sm" : "text-amber-600 text-sm"}>
-                                {totalMonthlyCost <= targetBudget ? "under" : "over"} ${targetBudget} target
-                            </span>
-                        )}
-                    </motion.div>
-
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-medium dark:text-zinc-50">Recommended Services</h2>
-                        <button
-                            onClick={handleConfirm}
-                            disabled={loading}
-                            className="px-4 py-1.5 text-sm font-medium rounded-md bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-                        >
-                            {confirmed ? "Confirmed!" : "Confirm"}
-                        </button>
-                    </div>
-                    <p className="text-sm text-zinc-500 mb-4 dark:text-zinc-400">
-                        Based on your taste and budget. Toggle to adjust, then confirm.
-                    </p>
-                    <motion.div
-                        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-                        variants={staggerContainer}
-                        initial="initial"
-                        animate="animate"
-                    >
-                        {optimizedServices.map((svc) => {
-                            const isActive = svc.recommendedStatus === "active" || svc.recommendedStatus === "always";
-                            return (
-                                <motion.div
-                                    key={svc.serviceId}
-                                    variants={staggerItem}
-                                    className={`rounded-lg border p-4 shadow-sm transition-opacity ${isActive
-                                        ? "border-zinc-200 bg-white"
-                                        : "border-dashed border-zinc-300 bg-zinc-50 opacity-50 dark:bg-zinc-900"
-                                    }`}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h3 className={`text-lg font-semibold ${!isActive ? "dark:text-zinc-50" : ""}`}>{svc.name}</h3>
-                                            <p className="text-sm text-zinc-500">${svc.monthlyPrice.toFixed(2)} / month</p>
-                                            <p className="text-xs text-zinc-400">{svc.showCount} shows for you</p>
-                                        </div>
-                                        <div className="text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                                            <button onClick={() => handleStatusToggle(svc)} className="underline">
-                                                {svc.recommendedStatus}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
-                    </motion.div>
-                </section>
+                {isFirstVisit ? (
+                    <>
+                        <BudgetAndServicesSection
+                            loading={loading}
+                            confirmed={confirmed}
+                            totalMonthlyCost={totalMonthlyCost}
+                            targetBudget={targetBudget}
+                            optimizedServices={optimizedServices}
+                            handleConfirm={handleConfirm}
+                            handleStatusToggle={handleStatusToggle}
+                        />
+                        <WhatToWatchSection
+                            loading={loading}
+                            recommended={recommended}
+                            sortOrder={sortOrder}
+                            setSortOrder={setSortOrder}
+                            setPage={setPage}
+                            sortedShows={sortedShows}
+                            pageShows={pageShows}
+                            totalPages={totalPages}
+                            clampedPage={clampedPage}
+                            activeServiceIds={activeServiceIds}
+                            setPendingDismiss={setPendingDismiss}
+                        />
+                    </>
+                ) : (
+                    <>
+                        <WhatToWatchSection
+                            loading={loading}
+                            recommended={recommended}
+                            sortOrder={sortOrder}
+                            setSortOrder={setSortOrder}
+                            setPage={setPage}
+                            sortedShows={sortedShows}
+                            pageShows={pageShows}
+                            totalPages={totalPages}
+                            clampedPage={clampedPage}
+                            activeServiceIds={activeServiceIds}
+                            setPendingDismiss={setPendingDismiss}
+                        />
+                        <BudgetAndServicesSection
+                            loading={loading}
+                            confirmed={confirmed}
+                            totalMonthlyCost={totalMonthlyCost}
+                            targetBudget={targetBudget}
+                            optimizedServices={optimizedServices}
+                            handleConfirm={handleConfirm}
+                            handleStatusToggle={handleStatusToggle}
+                        />
+                    </>
+                )}
 
                 {/* Get new recommendations */}
                 <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
@@ -488,7 +627,6 @@ export default function Dashboard(): JSX.Element {
                 </div>
             </main>
 
-            {/* Dismiss modal */}
             <AnimatePresence>
                 {pendingDismiss && (
                     <motion.div
@@ -508,7 +646,7 @@ export default function Dashboard(): JSX.Element {
                             onClick={(e) => e.stopPropagation()}
                         >
                             <h3 className="text-lg font-semibold mb-1 dark:text-zinc-50">Remove from watchlist?</h3>
-                            <p className="text-sm text-zinc-500 mb-5 dark:text-zinc-400 line-clamp-1">{pendingDismiss.title}</p>
+                            <p className="text-sm text-zinc-500 mb-5 dark:text-zinc-400 font-display italic line-clamp-1">{pendingDismiss.title}</p>
                             <div className="flex gap-3 mb-6">
                                 <button
                                     onClick={() => { handleDismiss(pendingDismiss.showId); setPendingDismiss(null); }}

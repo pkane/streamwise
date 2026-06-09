@@ -188,6 +188,7 @@ export default function Onboarding6() {
     function handleGoToDashboard() {
         try {
             localStorage.setItem("streamwise_onboarding_complete", "1");
+            localStorage.setItem("streamwise_dashboard_first_view", "1");
         } catch { /* ignore */ }
         router.push("/dashboard");
     }
@@ -197,10 +198,10 @@ export default function Onboarding6() {
             <main className="mx-auto max-w-3xl">
                 <header className="text-center text-balance py-12 min-h-48">
                     <motion.h1
-                        className="text-2xl font-semibold dark:text-zinc-50"
+                        className="text-2xl font-semibold font-display dark:text-zinc-50"
                         {...fadeInUp}
                     >
-                        You are the {headline}
+                        You are the <span className="italic">{headline}</span>
                     </motion.h1>
                     <motion.p
                         className="text-sm text-zinc-400"
@@ -280,7 +281,7 @@ export default function Onboarding6() {
                                             className="rounded-sm object-cover w-full shadow-sm"
                                         />
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-sm flex items-end p-1">
-                                            <span className="text-white text-xs font-medium line-clamp-2">{show.title}</span>
+                                            <span className="text-white text-xs font-medium font-display italic line-clamp-2">{show.title}</span>
                                         </div>
                                     </motion.div>
                                 ))}

@@ -141,7 +141,7 @@ export default function Onboarding3() {
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center text-balance py-12 min-h-48">
-                    <motion.h1 className="text-2xl font-semibold dark:text-zinc-50" {...fadeInUp}>
+                    <motion.h1 className="text-2xl font-semibold font-display dark:text-zinc-50" {...fadeInUp}>
                         What kinds of shows do you actually look forward to watching?
                     </motion.h1>
                     <motion.p
@@ -184,7 +184,7 @@ export default function Onboarding3() {
                     {/* 3B: Seen / Skip / Want — revealed after selecting genres */}
                     {revealSeen && (
                         <section className="mt-12">
-                            <h2 className="text-xl font-semibold">Anything here you’ve already watched—or want us to skip?</h2>
+                            <h2 className="text-xl font-semibold font-display">Anything here you’ve already watched—or want us to skip?</h2>
                             <p className="text-sm text-zinc-600 mt-1">This keeps recommendations focused on what’s new for you.</p>
 
                             <div className="grid grid-cols-1 gap-4 mt-6">
@@ -210,7 +210,7 @@ export default function Onboarding3() {
                                             <div key={sid} className="flex items-center gap-4 border rounded p-3 bg-white">
                                                 <img src={(show as any).imageSet?.verticalPoster?.w360 ?? (show as any).poster ?? "/vertical-poster.svg"} alt={(show as any).title ?? (show as any).name} width={56} height={84} className="rounded-sm object-cover" />
                                                 <div className="flex-1">
-                                                    <div className="font-medium">{(show as any).title ?? (show as any).name}</div>
+                                                    <div className="font-medium font-display italic">{(show as any).title ?? (show as any).name}</div>
                                                     <div className="text-sm text-zinc-500">{((show as any).serviceId ?? "").replace?.("svc_", "")}</div>
                                                     {(() => {
                                                         const label = getSeasonLabel(show);

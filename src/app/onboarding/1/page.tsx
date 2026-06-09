@@ -104,7 +104,7 @@ export default function OnboardingStep1() {
         <div className="min-h-screen bg-zinc-50 p-6 dark:bg-black">
             <main className="mx-auto max-w-3xl">
                 <header className="text-center py-12 min-h-48">
-                    <motion.h1 className="text-2xl font-semibold dark:text-zinc-50" {...fadeInUp}>
+                    <motion.h1 className="text-2xl font-semibold font-display dark:text-zinc-50" {...fadeInUp}>
                         Which streaming services do you currently have?
                     </motion.h1>
                     <motion.p
